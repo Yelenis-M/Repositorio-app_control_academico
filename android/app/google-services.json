@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "974631812747",
+    "project_id": "control-academico-app-51f41",
+    "storage_bucket": "control-academico-app-51f41.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:974631812747:android:bc658ed58e0d0ab2a19e8e",
+        "android_client_info": {
+          "package_name": "com.example.app_control_academico"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCkLR2iDpYk4AZgaRRRmrUKjslDaUyYGDU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
