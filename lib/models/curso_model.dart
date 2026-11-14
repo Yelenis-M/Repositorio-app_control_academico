@@ -5,7 +5,8 @@ class CursoModel {
   final String prerequisitos;
   final int semestre;
   final String carreraId;
-  double? nota; // Null si aún no se le ha ingresado nota
+  double? nota; // Vacío (null) hasta que el usuario lo llene
+  String? catedratico; // Vacío (null) hasta que el usuario elija o escriba el catedrático
 
   CursoModel({
     required this.codigo,
@@ -15,19 +16,20 @@ class CursoModel {
     required this.semestre,
     required this.carreraId,
     this.nota,
+    this.catedratico,
   });
 
-  // Regla de negocio: aprueba con 61 o más
+  // Aprueba con 61 o más
   bool get aprobado => (nota ?? 0) >= 61.0;
 
-  // Si aprueba gana los créditos completos, si reprueba gana 0
+  // Si aprueba suma los créditos, si no 0
   int get creditosObtenidos => aprobado ? creditos : 0;
 
-  // Mapea los datos desde Firestore
   factory CursoModel.fromMap(
     Map<String, dynamic> data,
     String documentId, {
     double? nota,
+    String? catedratico,
   }) {
     return CursoModel(
       codigo: documentId,
@@ -37,12 +39,13 @@ class CursoModel {
       semestre: (data['semestre'] as num?)?.toInt() ?? 1,
       carreraId: data['carrera_id'] ?? 'sistemas',
       nota: nota,
+      catedratico: catedratico,
     );
   }
 
-  // Convierte a Map si se necesita registrar en Firestore
   Map<String, dynamic> toMap() {
     return {
+      'codigo': codigo,
       'nombre': nombre,
       'creditos': creditos,
       'prerequisitos': prerequisitos,
