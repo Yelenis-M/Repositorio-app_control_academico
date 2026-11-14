@@ -1,121 +1,182 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'services/auth_service.dart';
+import 'models/usuario_model.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  runApp(const PruebaApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class PruebaApp extends StatelessWidget {
+  const PruebaApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.indigo),
+      home: const TestLoginScreen(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class TestLoginScreen extends StatefulWidget {
+  const TestLoginScreen({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<TestLoginScreen> createState() => _TestLoginScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _TestLoginScreenState extends State<TestLoginScreen> {
+  final _authService = AuthService();
+  final _userCtrl = TextEditingController(text: 'gerson');
+  final _passCtrl = TextEditingController(text: '123456');
 
-  void _incrementCounter() {
+  String _estado = 'Listo para probar';
+  UsuarioModel? _usuarioLogueado;
+  bool _cargando = false;
+
+  Future<void> _probarLogin() async {
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _cargando = true;
+      _estado = 'Validando con usuario/contraseña...';
     });
+
+    try {
+      final user = await _authService.login(_userCtrl.text, _passCtrl.text);
+      setState(() {
+        _cargando = false;
+        _usuarioLogueado = user;
+        _estado = user != null
+            ? '¡Login Exitoso!'
+            : 'Credenciales incorrectas o usuario no encontrado.';
+      });
+    } catch (e) {
+      setState(() {
+        _cargando = false;
+        _estado = 'Error: $e';
+      });
+    }
+  }
+
+  Future<void> _probarGoogle() async {
+    setState(() {
+      _cargando = true;
+      _estado = 'Abriendo selector de Google...';
+    });
+
+    try {
+      final user = await _authService.loginConGoogle();
+      setState(() {
+        _cargando = false;
+        _usuarioLogueado = user;
+        _estado = user != null
+            ? '¡Login con Google Exitoso!'
+            : 'Acceso denegado: Ese correo de Google no está en la colección usuarios.';
+      });
+    } catch (e) {
+      setState(() {
+        _cargando = false;
+        _estado = 'Error con Google: $e';
+      });
+    }
+  }
+
+  Future<void> _probarRecuperacion() async {
+    final correo = _usuarioLogueado?.correo ?? _userCtrl.text.trim();
+    if (!correo.contains('@')) {
+      setState(() {
+        _estado = 'Escribe el correo en la primera caja para enviar el link.';
+      });
+      return;
+    }
+
+    try {
+      await _authService.enviarCorreoRecuperacion(correo);
+      setState(() {
+        _estado = '¡Correo de recuperación enviado a $correo!';
+      });
+    } catch (e) {
+      setState(() {
+        _estado = 'Error al enviar correo: $e';
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
+      appBar: AppBar(title: const Text('Prueba de Auth Completo')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+            TextField(
+              controller: _userCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Usuario / Carné / Correo',
+                border: OutlineInputBorder(),
+              ),
             ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _passCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Contraseña',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (_cargando)
+              const CircularProgressIndicator()
+            else
+              Column(
+                children: [
+                  Wrap(
+                    spacing: 10,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      ElevatedButton(
+                        onPressed: _probarLogin,
+                        child: const Text('Probar Login'),
+                      ),
+                      OutlinedButton(
+                        onPressed: _probarRecuperacion,
+                        child: const Text('Olvidé Contraseña'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: _probarGoogle,
+                    icon: const Icon(Icons.account_circle),
+                    label: const Text('Continuar con Google'),
+                  ),
+                ],
+              ),
+            const SizedBox(height: 24),
+            Text(
+              _estado,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            if (_usuarioLogueado != null) ...[
+              const Divider(height: 30),
+              Text('Nombre: ${_usuarioLogueado!.nombre}'),
+              Text('Carné: ${_usuarioLogueado!.carnet}'),
+              Text('Correo: ${_usuarioLogueado!.correo}'),
+              Text('Carrera: ${_usuarioLogueado!.carrera}'),
+              Text('Año Ingreso: ${_usuarioLogueado!.anioIngreso}'),
+            ],
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
       ),
     );
   }
