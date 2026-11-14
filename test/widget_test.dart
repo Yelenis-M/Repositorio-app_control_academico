@@ -1,30 +1,87 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
+// test/widget_test.dart
+import 'package:app_control_academico/main.dart';
+import 'package:app_control_academico/screens/login_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:app_control_academico/main.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  setUp(() {
+    // Necesario si ThemeProvider usa SharedPreferences
+    SharedPreferences.setMockInitialValues({});
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  testWidgets('La vista de acceso muestra los elementos principales',
+      (tester) async {
+    // Cargamos la app
+    await tester.pumpWidget(const PromediUmApp());
+    await tester.pumpAndSettle();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    // Título principal
+    expect(find.text('Iniciar sesión'), findsOneWidget);
+
+    // Campos y botón de ingreso
+    expect(find.text('Usuario'), findsOneWidget);
+    expect(find.text('Contraseña'), findsOneWidget);
+    expect(find.text('Ingresar'), findsOneWidget);
+
+    // Enlace de recuperación
+    expect(find.text('¿Olvidaste tu contraseña?'), findsOneWidget);
+  });
+
+  testWidgets('Validación: usuario y contraseña vacíos muestran error',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LoginScreen(
+          onSignInWithUser: (usuario, contrasena) async {},
+          onSignInWithGoogle: () async {},
+          onSendPasswordReset: (correo) async {},
+        ),
+      ),
+    );
+
+    // Toca "Ingresar" sin llenar nada
+    await tester.tap(find.text('Ingresar'));
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Escribe tu usuario.'), findsOneWidget);
+    expect(find.text('Escribe tu contraseña.'), findsOneWidget);
+  });
+
+  testWidgets('Recuperación: correo no autorizado muestra mensaje',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LoginScreen(
+          onSignInWithUser: (usuario, contrasena) async {},
+          onSignInWithGoogle: () async {},
+          onSendPasswordReset: (correo) async {
+            throw Exception('correo-no-autorizado');
+          },
+        ),
+      ),
+    );
+
+    // Abrir diálogo de recuperación
+    await tester.tap(find.text('¿Olvidaste tu contraseña?'));
+    await tester.pumpAndSettle();
+
+    // Escribir un correo válido en el diálogo
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Correo autorizado'),
+      'noautorizado@upana.edu.gt',
+    );
+    await tester.pump();
+
+    // Enviar
+    await tester.tap(find.text('Enviar enlace'));
+    await tester.pumpAndSettle();
+
+    // Verificar el mensaje amigable en el SnackBar
+    expect(
+      find.text('El correo no está autorizado. Verifica con el administrador.'),
+      findsOneWidget,
+    );
   });
 }
