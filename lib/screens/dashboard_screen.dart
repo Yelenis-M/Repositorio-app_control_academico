@@ -371,25 +371,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     text: 'Ver materias del semestre',
                     icon: Icons.arrow_forward_rounded,
                     onPressed: () {
-                      final bloqueado =
-                          _semestreSeleccionado > _semestreActual;
-                      if (widget.onOpenSemester != null) {
-                        widget.onOpenSemester!(
-                          _semestreSeleccionado,
-                          bloqueado,
-                        );
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            behavior: SnackBarBehavior.floating,
-                            content: Text(
-                              bloqueado
-                                  ? 'Semestre $_semestreSeleccionado (Solo lectura)'
-                                  : 'Abriendo Semestre $_semestreSeleccionado',
-                            ),
+                      final bloqueado = _semestreSeleccionado > _semestreActual;
+                      // 1. Muestra el mensaje flotante (SnackBar) que ya tenías
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          behavior: SnackBarBehavior.floating,
+                           content: Text(
+                            bloqueado
+                            ? 'Semestre $_semestreSeleccionado (Solo lectura)'
+                            : 'Abriendo Semestre $_semestreSeleccionado',
                           ),
-                        );
-                      }
+                        ),
+                      );
+                      // 2. Navega a la ruta nombrada enviando los argumentos
+                      Navigator.pushNamed(
+                        context,
+                        '/semestre',
+                        arguments: {
+                          'semestre': _semestreSeleccionado,
+                          'bloqueado': bloqueado,
+                        },
+                      );
                     },
                   ),
                 ],
@@ -404,7 +406,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // ==========================================
   // RUTA 2: RESUMEN GLOBAL DE LA CARRERA
   // ==========================================
+  // ==========================================
+  // RUTA 2: RESUMEN GLOBAL DE LA CARRERA
+  // ==========================================
   Widget _buildRutaResumenGlobal(ColorScheme colorScheme) {
+    // Simulación de datos (cuando Gerson conecte Firebase, esto vendrá de un Provider o Stream)
+    final bool tieneNotasRegistradas = false; // Cambiar a true cuando haya datos reales
+
+    if (!tieneNotasRegistradas) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: AppCard(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.assignment_outlined,
+                    size: 48,
+                    color: colorScheme.primary,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    '¡Aún no hay notas registradas!',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Tienes que registrar tus notas en los semestres habilitados para poder obtener tu promedio general y estadísticas de la carrera.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Si SÍ hay notas, muestra el resumen normal con tus estadísticas:
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
       child: Column(
@@ -423,7 +473,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
           const SizedBox(height: 18),
-
           // Tarjeta destacada: Promedio General
           AppCard(
             child: Padding(
@@ -470,10 +519,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
           ),
-
           const SizedBox(height: 14),
-
-          // Fila de Aprobados y Reprobados (sin altura rígida para evitar overflow)
+          // Fila de Aprobados y Reprobados
           Row(
             children: [
               Expanded(
@@ -495,9 +542,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 14),
-
           // Fila de Total Cursos y Créditos Aprobados
           Row(
             children: [
