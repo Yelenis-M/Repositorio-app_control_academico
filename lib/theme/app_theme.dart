@@ -9,10 +9,21 @@ class AppTheme {
   }) {
     final esOscuro = brightness == Brightness.dark;
 
-    final esquema = ColorScheme.fromSeed(
+    // Generar una paleta adaptada al modo claro u oscuro.
+    final esquemaBase = ColorScheme.fromSeed(
       seedColor: seedColor,
       brightness: brightness,
-      dynamicSchemeVariant: DynamicSchemeVariant.expressive,
+      dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+    );
+
+    // Mantener el color seleccionado como color principal.
+    final esquema = esquemaBase.copyWith(
+      primary: seedColor,
+      onPrimary:
+          ThemeData.estimateBrightnessForColor(seedColor) ==
+                  Brightness.dark
+              ? Colors.white
+              : Colors.black,
     );
 
     final base = ThemeData(
@@ -53,6 +64,8 @@ class AppTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           minimumSize: const Size.fromHeight(52),
+          backgroundColor: esquema.primary,
+          foregroundColor: esquema.onPrimary,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -77,6 +90,28 @@ class AppTheme {
             fontWeight: FontWeight.w600,
           ),
         ),
+      ),
+
+      // Personalizar los interruptores.
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return esquema.onPrimary;
+          }
+          return esquema.outline;
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return esquema.primary;
+          }
+          return esquema.surfaceContainerHighest;
+        }),
+        trackOutlineColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return esquema.primary;
+          }
+          return esquema.outline;
+        }),
       ),
     );
   }
