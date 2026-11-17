@@ -1,11 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../data/datos_academicos_mock.dart';
+import '../models/catedratico.dart';
 import '../theme/theme_provider.dart';
 import '../widgets/app_background.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_card.dart';
 import 'profile/profile_screen.dart';
+import '../screens/academico/contacto_catedratico_view.dart'; // Asegúrate de importar tu vista de contacto existente
+import '../screens/academico/form_catedratico_view.dart';     // Asegúrate de importar el formulario de catedrático
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
@@ -14,7 +18,6 @@ class DashboardScreen extends StatefulWidget {
     this.onLogout,
   });
 
-  /// Callback para abrir SemestreScreen(numeroSemestre, esBloqueado)
   final void Function(int semestre, bool bloqueado)? onOpenSemester;
   final VoidCallback? onLogout;
 
@@ -26,11 +29,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _indiceRuta = 0;
   int _semestreSeleccionado = 4;
 
-  // Timer para actualizar el saludo
   Timer? _saludoTimer;
   String _saludo = '';
 
-  // Datos de ejemplo (Gerson los inyectará desde usuario_model.dart)
   final String _primerNombre = 'Yelenis';
   final String _nombreCompleto = 'Yelenis Andrea Marroquín López';
   final String _carne = '000150079';
@@ -44,16 +45,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _saludo = _obtenerSaludo(); // calcular al iniciar
+    _saludo = _obtenerSaludo();
     _iniciarTimerSaludo();
   }
+
   @override
   void dispose() {
     _saludoTimer?.cancel();
     super.dispose();
   }
 
-  /// Inicia un timer que revisa cada minuto si el saludo debe cambiar.
   void _iniciarTimerSaludo() {
     _saludoTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       final nuevoSaludo = _obtenerSaludo();
@@ -63,10 +64,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  /// Calcula el saludo según la hora actual.
   String _obtenerSaludo() {
     final hora = DateTime.now().hour;
-
     if (hora >= 5 && hora < 12) {
       return 'Buenos días';
     } else if (hora >= 12 && hora < 18) {
@@ -87,9 +86,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              // ==========================================
-              // BARRA SUPERIOR (Avatar + Saludo + Sol/Luna)
-              // ==========================================
+              // BARRA SUPERIOR
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 14, 16, 8),
                 child: Row(
@@ -137,7 +134,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
                     ),
-                    // Botón de Sol / Luna para alternar tema rápido
                     IconButton(
                       tooltip: esOscuro
                           ? 'Cambiar a modo claro'
@@ -157,15 +153,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
 
-              // ==========================================
-              // CONTENIDO SEGÚN LA RUTA SELECCIONADA
-              // ==========================================
+              // CONTENIDO DE LAS RUTAS (IndexedStack con 3 opciones)
               Expanded(
                 child: IndexedStack(
                   index: _indiceRuta,
                   children: [
                     _buildRutaInicio(colorScheme),
                     _buildRutaResumenGlobal(colorScheme),
+                    const _RutaCatedraticos(), // <--- Nueva ruta de Catedráticos
                   ],
                 ),
               ),
@@ -187,16 +182,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
           NavigationDestination(
             icon: Icon(Icons.insights_outlined),
             selectedIcon: Icon(Icons.insights_rounded),
-            label: 'Resumen Global',
+            label: 'Resumen',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.group_outlined),
+            selectedIcon: Icon(Icons.group_rounded),
+            label: 'Catedráticos',
           ),
         ],
       ),
     );
   }
 
-  // ==========================================
-  // RUTA 1: INICIO Y GESTIÓN POR SEMESTRE
-  // ==========================================
   Widget _buildRutaInicio(ColorScheme colorScheme) {
     final double progreso = _semestreActual / _totalSemestres;
 
@@ -205,7 +202,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Tarjeta central de Identidad (ID y Carrera centrados)
           AppCard(
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
@@ -252,10 +248,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
           ),
-
           const SizedBox(height: 20),
-
-          // Progreso de la Carrera
           AppCard(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -303,10 +296,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
           ),
-
           const SizedBox(height: 24),
-
-          // Gestión Académica por Semestre
           const Text(
             'Gestión Académica',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -372,18 +362,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     icon: Icons.arrow_forward_rounded,
                     onPressed: () {
                       final bloqueado = _semestreSeleccionado > _semestreActual;
-                      // 1. Muestra el mensaje flotante (SnackBar) que ya tenías
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           behavior: SnackBarBehavior.floating,
-                           content: Text(
+                          content: Text(
                             bloqueado
-                            ? 'Semestre $_semestreSeleccionado (Solo lectura)'
-                            : 'Abriendo Semestre $_semestreSeleccionado',
+                                ? 'Semestre $_semestreSeleccionado (Solo lectura)'
+                                : 'Abriendo Semestre $_semestreSeleccionado',
                           ),
                         ),
                       );
-                      // 2. Navega a la ruta nombrada enviando los argumentos
                       Navigator.pushNamed(
                         context,
                         '/semestre',
@@ -403,58 +391,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ==========================================
-  // RUTA 2: RESUMEN GLOBAL DE LA CARRERA
-  // ==========================================
-  // ==========================================
-  // RUTA 2: RESUMEN GLOBAL DE LA CARRERA
-  // ==========================================
   Widget _buildRutaResumenGlobal(ColorScheme colorScheme) {
-    // Simulación de datos (cuando Gerson conecte Firebase, esto vendrá de un Provider o Stream)
-    final bool tieneNotasRegistradas = false; // Cambiar a true cuando haya datos reales
-
-    if (!tieneNotasRegistradas) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: AppCard(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.assignment_outlined,
-                    size: 48,
-                    color: colorScheme.primary,
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    '¡Aún no hay notas registradas!',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Tienes que registrar tus notas en los semestres habilitados para poder obtener tu promedio general y estadísticas de la carrera.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    // Si SÍ hay notas, muestra el resumen normal con tus estadísticas:
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
       child: Column(
@@ -473,7 +410,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
           const SizedBox(height: 18),
-          // Tarjeta destacada: Promedio General
           AppCard(
             child: Padding(
               padding: const EdgeInsets.all(20.0),
@@ -520,7 +456,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
           const SizedBox(height: 14),
-          // Fila de Aprobados y Reprobados
           Row(
             children: [
               Expanded(
@@ -543,7 +478,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
           const SizedBox(height: 14),
-          // Fila de Total Cursos y Créditos Aprobados
           Row(
             children: [
               Expanded(
@@ -584,6 +518,208 @@ class _DashboardScreenState extends State<DashboardScreen> {
           fotoUrl: _fotoPerfilUrl,
           onLogout: widget.onLogout,
         ),
+      ),
+    );
+  }
+}
+
+// ==========================================
+// PANTALLA DE CATEDRÁTICOS (Buscador + Agrupados por Letra)
+// ==========================================
+class _RutaCatedraticos extends StatefulWidget {
+  const _RutaCatedraticos();
+
+  @override
+  State<_RutaCatedraticos> createState() => _RutaCatedraticosState();
+}
+
+class _RutaCatedraticosState extends State<_RutaCatedraticos> {
+  final TextEditingController _searchController = TextEditingController();
+  String _filtroBusqueda = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      setState(() {
+        _filtroBusqueda = _searchController.text.toLowerCase().trim();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final esquema = Theme.of(context).colorScheme;
+    final datos = context.watch<DatosAcademicosMock>();
+    final todosCatedraticos = datos.catedraticos;
+
+    // Filtrar profesores por el buscador
+    final profesoresFiltrados = todosCatedraticos.where((cat) {
+      return cat.nombre.toLowerCase().contains(_filtroBusqueda) ||
+          cat.correo.toLowerCase().contains(_filtroBusqueda);
+    }).toList();
+
+    // Ordenar alfabéticamente por nombre
+    profesoresFiltrados.sort((a, b) => a.nombre.compareTo(b.nombre));
+
+    // Agrupar por la primera letra
+    final Map<String, List<Catedratico>> agrupados = {};
+    for (var prof in profesoresFiltrados) {
+      if (prof.nombre.isNotEmpty) {
+        final letra = prof.nombre[0].toUpperCase();
+        agrupados.putIfAbsent(letra, () => []).add(prof);
+      }
+    }
+    final letrasOrdenadas = agrupados.keys.toList()..sort();
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const FormCatedraticoView(),
+            ),
+          );
+        },
+        icon: const Icon(Icons.person_add_rounded),
+        label: const Text('Nuevo profesor'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20.0),
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Profesores',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                '${todosCatedraticos.length} profesores',
+                style: TextStyle(color: esquema.onSurfaceVariant, fontSize: 13),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // Buscador similar al boceto
+          TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Buscar profesor...',
+              prefixIcon: const Icon(Icons.search),
+              filled: true,
+              fillColor: esquema.surface,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 0),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (profesoresFiltrados.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 40),
+              child: Center(
+                child: Text(
+                  'No se encontraron profesores',
+                  style: TextStyle(color: esquema.onSurfaceVariant),
+                ),
+              ),
+            )
+          else
+            for (final letra in letrasOrdenadas) ...[
+              // Indicador de la letra (A, B, N, R, etc.)
+              Text(
+                letra,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: esquema.primary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...agrupados[letra]!.map((profesor) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: AppCard(
+                    padding: EdgeInsets.zero,
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
+                      leading: CircleAvatar(
+                        backgroundColor: profesor.color.withValues(alpha: 0.16),
+                        child: Text(
+                          letra,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: profesor.color,
+                          ),
+                        ),
+                      ),
+                      title: Text(
+                        profesor.nombre,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text(
+                        profesor.correo,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: esquema.onSurfaceVariant,
+                        ),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              Icons.email_outlined,
+                              color: esquema.primary, // Asegúrate de que 'esquema' esté definido en tu contexto
+                              size: 20,
+                            ),
+                            onPressed: () { // <--- CORREGIDO: Se cambió onTap por onPressed
+                              // Abre la vista de contacto reutilizando tu widget existente
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ContactoCatedraticoView(
+                                    catedraticoId: profesor.id, // Asegúrate de que 'profesor' esté definido
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          const Icon(Icons.chevron_right_rounded, size: 20),
+                        ],
+                      ),
+                      onTap: () {
+                        // Al hacer clic en la tarjeta también abre la vista de contacto
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ContactoCatedraticoView(
+                              catedraticoId: profesor.id,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(height: 8),
+            ],
+        ],
       ),
     );
   }

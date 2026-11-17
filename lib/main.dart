@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'data/datos_academicos_mock.dart';
+import 'screens/academico/semestre_view.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/settings/settings_screen.dart';
-// import 'screens/semestre_screen.dart'; 
 import 'theme/theme_provider.dart';
 import 'theme/app_theme.dart';
 
@@ -19,8 +20,11 @@ Future<void> main() async {
   await themeProvider.loadPreferences();
 
   runApp(
-    ChangeNotifierProvider.value(
-      value: themeProvider,
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: themeProvider),
+        ChangeNotifierProvider(create: (_) => DatosAcademicosMock()),
+      ],
       child: const PromediUmApp(),
     ),
   );
@@ -93,24 +97,14 @@ class PromediUmApp extends StatelessWidget {
         
         // Ruta para el Detalle del Semestre (Pantalla 3)
         '/semestre': (context) {
-          final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+          final args =
+              ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
           final int numeroSemestre = args?['semestre'] ?? 1;
           final bool esBloqueado = args?['bloqueado'] ?? false;
 
-          // Aquí llamas a tu pantalla cuando esté creada:
-          // return SemestreScreen(numeroSemestre: numeroSemestre, esSemestreBloqueado: esBloqueado);
-          
-          // Placeholder temporal mientras creas el archivo:
-          return Scaffold(
-            appBar: AppBar(title: Text('Semestre $numeroSemestre')),
-            body: Center(
-              child: Text(
-                esBloqueado 
-                  ? 'Semestre $numeroSemestre (Bloqueado / Solo Lectura)' 
-                  : 'Semestre $numeroSemestre (Habilitado para notas)',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
+          return SemestreView(
+            numeroSemestre: numeroSemestre,
+            esBloqueado: esBloqueado,
           );
         },
       },

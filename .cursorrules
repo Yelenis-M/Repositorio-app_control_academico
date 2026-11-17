@@ -1,0 +1,12 @@
+# Reglas del proyecto PromediUm para Cursor
+
+## Restricciones de Arquitectura y Roles
+- El usuario (Yelenis) es responsable exclusivamente del FRONTEND: interfaz visual, widgets personalizados, diseño, animaciones y estados locales (setState/Provider visual).
+- El backend y la conexión a Firebase Auth / Cloud Firestore serán implementados posteriormente por Gerson.
+- NO modifiques, crees ni intentes conectar lógica real de Firebase, llamadas HTTP directas a servidores ni servicios de autenticación backend.
+- Utiliza siempre listas locales temporales (mocks) y callbacks limpios en las vistas para permitir una futura inyección de datos de Firestore sin romper la compilación.
+
+## Sistema de Diseño
+- Respeta siempre ThemeProvider, AppTheme y el ColorScheme del proyecto.
+- Nunca uses colores fijos (ej. Colors.blue) a menos que sean estados semánticos (éxito/error) o colores personalizados por el usuario.
+- Usa los componentes globales existentes (AppCard, AppButton, AppBackground).

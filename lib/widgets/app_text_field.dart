@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// Campo de texto reutilizable para formularios de PromediUm.
 class AppTextField extends StatefulWidget {
@@ -17,7 +18,11 @@ class AppTextField extends StatefulWidget {
     this.onChanged,
     this.onFieldSubmitted,
     this.maxLength,
+    this.maxLines = 1,
+    this.minLines,
     this.textInputAction,
+    this.textCapitalization = TextCapitalization.none,
+    this.inputFormatters,
     this.autofillHints,
     this.autofocus = false,
   });
@@ -35,7 +40,11 @@ class AppTextField extends StatefulWidget {
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onFieldSubmitted;
   final int? maxLength;
+  final int? maxLines;
+  final int? minLines;
   final TextInputAction? textInputAction;
+  final TextCapitalization textCapitalization;
+  final List<TextInputFormatter>? inputFormatters;
   final Iterable<String>? autofillHints;
   final bool autofocus;
 
@@ -62,6 +71,8 @@ class _AppTextFieldState extends State<AppTextField> {
 
   @override
   Widget build(BuildContext context) {
+    final variasLineas = !widget.obscureText && (widget.maxLines ?? 2) > 1;
+
     return TextFormField(
       controller: widget.controller,
       keyboardType: widget.keyboardType,
@@ -71,12 +82,17 @@ class _AppTextFieldState extends State<AppTextField> {
       onChanged: widget.onChanged,
       onFieldSubmitted: widget.onFieldSubmitted,
       maxLength: widget.maxLength,
+      maxLines: widget.obscureText ? 1 : widget.maxLines,
+      minLines: widget.obscureText ? null : widget.minLines,
       textInputAction: widget.textInputAction,
+      textCapitalization: widget.textCapitalization,
+      inputFormatters: widget.inputFormatters,
       autofillHints: widget.autofillHints,
       autofocus: widget.autofocus,
       decoration: InputDecoration(
         labelText: widget.label,
         hintText: widget.hint,
+        alignLabelWithHint: variasLineas,
         prefixIcon:
             widget.prefixIcon != null ? Icon(widget.prefixIcon) : null,
         suffixIcon: widget.obscureText
