@@ -59,12 +59,10 @@ class ResumenSemestre {
     var reprobados = 0;
     var suma = 0.0;
     var conNota = 0;
-    var creditos = 0;
+    var creditosAprobados = 0;
 
     for (final curso in cursos) {
-      // Sumamos inicialmente los créditos del curso
-      creditos += curso.creditos;
-      
+
       final nota = curso.calificacion;
       if (nota == null) continue;
       
@@ -73,10 +71,9 @@ class ResumenSemestre {
       
       if (esNotaAprobada(nota)) {
         aprobados += 1;
+        creditosAprobados += curso.creditos;
       } else {
         reprobados += 1;
-        // Si la materia está reprobada, restamos sus créditos del total
-        creditos -= curso.creditos;
       }
     }
 
@@ -84,7 +81,7 @@ class ResumenSemestre {
       aprobados: aprobados,
       reprobados: reprobados,
       promedio: conNota == 0 ? null : suma / conNota,
-      creditosTotales: creditos,
+      creditosTotales: creditosAprobados,
     );
   }
 

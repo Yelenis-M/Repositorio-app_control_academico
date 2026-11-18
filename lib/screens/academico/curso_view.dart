@@ -39,16 +39,45 @@ class CursoView extends StatelessWidget {
         actions: [
           // Si está en solo lectura, no mostramos los botones de edición ni borrado
           if (!soloLectura) ...[
-            IconButton(
-              tooltip: 'Editar',
-              color: esquema.primary,
-              onPressed: curso == null ? null : () => _abrirEdicion(context),
-              icon: const Icon(Icons.edit_outlined),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              child: Material(
+                color: esquema.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+                child: InkWell(
+                  onTap: curso == null ? null : () => _abrirEdicion(context),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.edit_outlined,
+                          size: 18,
+                          color: esquema.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Editar',
+                          style: TextStyle(
+                            color: esquema.primary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
             IconButton(
               tooltip: 'Eliminar información',
               color: esquema.primary,
-              onPressed: curso == null ? null : () => _confirmarEliminacion(context),
+              onPressed:
+                  curso == null ? null : () => _confirmarEliminacion(context),
               icon: const Icon(Icons.delete_outline),
             ),
             const SizedBox(width: 4),
@@ -103,18 +132,7 @@ class CursoView extends StatelessWidget {
                   _BloqueInfo(
                     icono: Icons.account_tree_outlined,
                     titulo: 'Requisitos',
-                    child: curso.requisitos.isEmpty
-                        ? const Text('Ninguno')
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              for (final requisito in curso.requisitos)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 2),
-                                  child: Text(requisito),
-                                ),
-                            ],
-                          ),
+                    child: _ListaRequisitos(requisitos: curso.requisitos),
                   ),
                   const SizedBox(height: 12),
                   _bloqueCatedratico(context, datos, curso),
@@ -158,7 +176,7 @@ class CursoView extends StatelessWidget {
                 MaterialPageRoute(
                   builder: (_) => ContactoCatedraticoView(
                     catedraticoId: catedratico.id,
-                    soloLectura: soloLectura, // <--- Propagamos el modo solo lectura
+                    soloLectura: soloLectura,
                   ),
                 ),
               );
@@ -185,7 +203,7 @@ class CursoView extends StatelessWidget {
           title: const Text('Eliminar información'),
           content: const Text(
             'Se borrarán los datos de catedrático, calificación y horario, '
-            'y también las configuraciones de ícono y color de esta materia.',
+            'descripción y también las configuraciones de ícono y color de esta materia.',
           ),
           actions: [
             AppButton(
@@ -229,6 +247,7 @@ class _CajaIcono extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final esquema = Theme.of(context).colorScheme;
+    // Agregamos el operador de respaldo por seguridad si el modelo aún devuelve nullable
     final color = curso.color ?? esquema.primary;
     final icono = curso.icono ?? Icons.menu_book_rounded;
 
@@ -378,7 +397,7 @@ class _BloqueInfo extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Icon(icono, color: esquema.primary),
                 const SizedBox(width: 12),
@@ -416,6 +435,78 @@ class _BloqueInfo extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Lista de requisitos con viñetas, wrap de texto y "ver más / ver menos".
+class _ListaRequisitos extends StatefulWidget {
+  const _ListaRequisitos({required this.requisitos});
+
+  final List<String> requisitos;
+
+  @override
+  State<_ListaRequisitos> createState() => _ListaRequisitosState();
+}
+
+class _ListaRequisitosState extends State<_ListaRequisitos> {
+  static const _maxVisibles = 4;
+  bool _expandido = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final esquema = Theme.of(context).colorScheme;
+
+    if (widget.requisitos.isEmpty) {
+      return const Text('Ninguno');
+    }
+
+    final visibles = _expandido
+        ? widget.requisitos
+        : widget.requisitos.take(_maxVisibles).toList();
+    final restantes = widget.requisitos.length - visibles.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final requisito in visibles)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 6, right: 8),
+                  child: Icon(
+                    Icons.circle,
+                    size: 6,
+                    color: esquema.primary,
+                  ),
+                ),
+                // Expanded permite que el texto haga wrap y no desborde
+                Expanded(
+                  child: Text(
+                    requisito,
+                    softWrap: true,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (restantes > 0 || _expandido)
+          TextButton(
+            onPressed: () => setState(() => _expandido = !_expandido),
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(0, 32),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              _expandido ? 'Ver menos' : 'Ver $restantes más',
+            ),
+          ),
+      ],
     );
   }
 }

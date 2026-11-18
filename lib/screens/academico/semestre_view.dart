@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/datos_academicos_mock.dart';
@@ -34,6 +35,7 @@ class _SemestreViewState extends State<SemestreView> {
   @override
   Widget build(BuildContext context) {
     final esquema = Theme.of(context).colorScheme;
+    final esOscuro = Theme.of(context).brightness == Brightness.dark;
     final datos = context.watch<DatosAcademicosMock>();
     final cursos = [...datos.cursosDelSemestre(widget.numeroSemestre)];
     cursos.sort((a, b) {
@@ -45,94 +47,190 @@ class _SemestreViewState extends State<SemestreView> {
     final cantidad = cursos.length;
     final textoCantidad = cantidad == 1 ? '1 curso' : '$cantidad cursos';
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: false,
-        title: const Text('Cursos'),
-        actions: [
-          TextButton.icon(
-            onPressed: () => setState(() => _ascendente = !_ascendente),
-            icon: const Icon(Icons.sort_by_alpha),
-            label: Text(_ascendente ? 'A-Z' : 'Z-A'),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
-      body: AppBackground(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-          children: [
-            Text(
-              'Semestre ${widget.numeroSemestre} - $textoCantidad',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: esquema.onSurfaceVariant,
-              ),
-            ),
-            if (widget.esBloqueado) ...[
-              const SizedBox(height: 12),
-              AppCard(
-                child: Row(
-                  children: [
-                    Icon(Icons.lock_outline, color: esquema.primary),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Este semestre es de solo lectura. Puedes consultar las materias, sin modificarlas.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: esquema.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ],
+    // Calculamos el total de créditos posibles sumando los créditos de todos los cursos del semestre
+    final totalCreditosSemestre = cursos.fold<int>(0, (sum, curso) => sum + curso.creditos);
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: esOscuro ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: false,
+          title: const Text('Cursos'),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: esquema.surfaceContainerHighest.withValues(alpha: 0.5),
+                ),
+                child: IconButton(
+                  tooltip: 'Ordenar asignaturas',
+                  onPressed: () => _mostrarOpcionesOrdenamiento(context),
+                  icon: Icon(Icons.tune_rounded, color: esquema.onSurface),
                 ),
               ),
-            ],
-            const SizedBox(height: 16),
-            _CuadroResumen(resumen: resumen),
-            const SizedBox(height: 24),
-            const Text(
-              'Todos tus cursos',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 12),
-            if (cursos.isEmpty)
-              AppCard(
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.menu_book_outlined,
-                      size: 40,
-                      color: esquema.primary,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'No hay cursos en este semestre.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: esquema.onSurfaceVariant),
-                    ),
-                  ],
-                ),
-              )
-            else
-              for (var i = 0; i < cursos.length; i++) ...[
-                if (i > 0) const SizedBox(height: 12),
-                _TarjetaMateria(
-                  curso: cursos[i],
-                  nombreCatedratico: datos
-                          .buscarCatedratico(cursos[i].catedraticoId)
-                          ?.nombre ??
-                      'Sin catedrático',
-                  onTap: () => _abrirCurso(cursos[i]),
-                ),
-              ],
+            const SizedBox(width: 4),
           ],
         ),
+        body: AppBackground(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+            children: [
+              Text(
+                'Semestre ${widget.numeroSemestre} - $textoCantidad',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: esquema.onSurfaceVariant,
+                ),
+              ),
+              if (widget.esBloqueado) ...[
+                const SizedBox(height: 12),
+                AppCard(
+                  child: Row(
+                    children: [
+                      Icon(Icons.lock_outline, color: esquema.primary),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Este semestre es de solo lectura. Puedes consultar las materias, sin modificarlas.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: esquema.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              _CuadroResumen(
+                resumen: resumen,
+                totalCreditosSemestre: totalCreditosSemestre,
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Todos tus cursos',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              if (cursos.isEmpty)
+                AppCard(
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.menu_book_outlined,
+                        size: 40,
+                        color: esquema.primary,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'No hay cursos en este semestre.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: esquema.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                for (var i = 0; i < cursos.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 12),
+                  _TarjetaMateria(
+                    curso: cursos[i],
+                    nombreCatedratico: datos
+                            .buscarCatedratico(cursos[i].catedraticoId)
+                            ?.nombre ??
+                        'Sin catedrático',
+                    onTap: () => _abrirCurso(cursos[i]),
+                  ),
+                ],
+            ],
+          ),
+        ),
       ),
+    );
+  }
+
+  void _mostrarOpcionesOrdenamiento(BuildContext context) {
+    final esquema = Theme.of(context).colorScheme;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: esquema.onSurfaceVariant.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Ordenar asignaturas',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    'Nombre (A-Z)',
+                    style: TextStyle(
+                      fontWeight: _ascendente ? FontWeight.bold : FontWeight.normal,
+                      color: _ascendente ? esquema.primary : esquema.onSurface,
+                    ),
+                  ),
+                  trailing: _ascendente
+                      ? Icon(Icons.check, color: esquema.primary)
+                      : null,
+                  onTap: () {
+                    setState(() => _ascendente = true);
+                    Navigator.pop(context);
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    'Nombre (Z-A)',
+                    style: TextStyle(
+                      fontWeight: !_ascendente ? FontWeight.bold : FontWeight.normal,
+                      color: !_ascendente ? esquema.primary : esquema.onSurface,
+                    ),
+                  ),
+                  trailing: !_ascendente
+                      ? Icon(Icons.check, color: esquema.primary)
+                      : null,
+                  onTap: () {
+                    setState(() => _ascendente = false);
+                    Navigator.pop(context);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -156,9 +254,13 @@ class _SemestreViewState extends State<SemestreView> {
 }
 
 class _CuadroResumen extends StatelessWidget {
-  const _CuadroResumen({required this.resumen});
+  const _CuadroResumen({
+    required this.resumen,
+    required this.totalCreditosSemestre,
+  });
 
   final ResumenSemestre resumen;
+  final int totalCreditosSemestre;
 
   @override
   Widget build(BuildContext context) {
@@ -190,8 +292,8 @@ class _CuadroResumen extends StatelessWidget {
           const Divider(height: 22),
           _FilaResumen(
             icono: Icons.military_tech_outlined,
-            etiqueta: 'Sumatoria de créditos totales por semestre',
-            valor: '${resumen.creditosTotales}',
+            etiqueta: 'Créditos Totales',
+            valor: '${resumen.creditosTotales} / $totalCreditosSemestre',
             colorValor: esquema.onSurface,
           ),
         ],

@@ -66,7 +66,6 @@ class DatosAcademicosMock extends ChangeNotifier {
   void eliminarCatedratico(String id) {
     _catedraticos.removeWhere((item) => item.id == id);
     notifyListeners();
-    // Si tienes algún callback para Firestore, puedes agregarlo aquí también
   }
 
   void actualizarCurso(Curso curso) {
@@ -136,7 +135,8 @@ const List<Catedratico> _catedraticosIniciales = [
   ),
 ];
 
-const List<Curso> _cursosIniciales = [
+// 👇 Quitamos el 'const' de aquí para que acepte el constructor dinámico
+final List<Curso> _cursosIniciales = [
   Curso(
     id: 's1-mate',
     semestre: 1,
@@ -444,62 +444,18 @@ const List<Curso> _cursosIniciales = [
     color: Color(0xFF00838F),
     icono: Icons.memory_rounded,
   ),
+  // ==========================
+  // CURSOS DEL SEMESTRE 5 (Solo lectura / Plan de estudios fijo)
+  // ==========================
   Curso(
     id: 's5-ia',
     semestre: 5,
     nombre: 'Inteligencia Artificial',
     creditos: 4,
     requisitos: ['Estadística I', 'Estructuras de Datos'],
-    icono: Icons.psychology_rounded,
     color: Color(0xFF6A1B9A),
-  ),
-  Curso(
-    id: 's5-seg',
-    semestre: 5,
-    nombre: 'Seguridad Informática',
-    creditos: 4,
-    requisitos: ['Redes de Computadoras'],
-    icono: Icons.security_rounded,
-    color: Color(0xFFC62828),
-  ),
-  Curso(
-    id: 's5-proy',
-    semestre: 5,
-    nombre: 'Administración de Proyectos',
-    creditos: 3,
-    requisitos: ['Ingeniería de Software'],
-    icono: Icons.groups_rounded,
-    color: Color(0xFF2E7D32),
-  ),
-  Curso(
-    id: 's5-arq',
-    semestre: 5,
-    nombre: 'Arquitectura de Computadoras',
-    creditos: 4,
-    requisitos: ['Sistemas Operativos'],
-    icono: Icons.computer_rounded,
-    color: Color(0xFF1565C0),
-  ),
-  // ==========================
-  // CURSOS DEL SEMESTRE 5 (Bloqueado / Solo lectura)
-  // ==========================
-  Curso(
-    id: 's5-ia',
-    semestre: 5,
-    nombre: 'Inteligencia Artificial',
-    creditos: 4,
-    requisitos: ['Estadística I', 'Estructuras de Datos'],
-    catedraticoId: 'cat-ana',
-    calificacion: 85, // Calificación de prueba para visualizar en solo lectura
+    icono: Icons.psychology_rounded,
     descripcion: 'Redes neuronales, aprendizaje automático y procesamiento de lenguaje natural.',
-    horario: HorarioCurso(
-      inicio: '07:00',
-      fin: '08:30',
-      inicioEsPm: false,
-      finEsPm: false,
-    ),
-    color: Color(0xFF6A1B9A),
-    icono: Icons.psychology_rounded,
   ),
   Curso(
     id: 's5-seg',
@@ -507,17 +463,9 @@ const List<Curso> _cursosIniciales = [
     nombre: 'Seguridad Informática',
     creditos: 4,
     requisitos: ['Redes de Computadoras'],
-    catedraticoId: 'cat-luis',
-    calificacion: 90,
-    descripcion: 'Criptografía, seguridad en redes y gestión de vulnerabilidades.',
-    horario: HorarioCurso(
-      inicio: '09:00',
-      fin: '10:30',
-      inicioEsPm: false,
-      finEsPm: false,
-    ),
     color: Color(0xFFC62828),
     icono: Icons.security_rounded,
+    descripcion: 'Criptografía, seguridad en redes y gestión de vulnerabilidades.',
   ),
   Curso(
     id: 's5-proy',
@@ -525,17 +473,9 @@ const List<Curso> _cursosIniciales = [
     nombre: 'Administración de Proyectos',
     creditos: 3,
     requisitos: ['Ingeniería de Software'],
-    catedraticoId: 'cat-jorge',
-    calificacion: 78,
-    descripcion: 'Metodologías ágiles, estimación y gestión de equipos de desarrollo.',
-    horario: HorarioCurso(
-      inicio: '11:00',
-      fin: '12:30',
-      inicioEsPm: false,
-      finEsPm: true,
-    ),
     color: Color(0xFF2E7D32),
     icono: Icons.groups_rounded,
+    descripcion: 'Metodologías ágiles, estimación y gestión de equipos de desarrollo.',
   ),
   Curso(
     id: 's5-arq',
@@ -543,16 +483,8 @@ const List<Curso> _cursosIniciales = [
     nombre: 'Arquitectura de Computadoras',
     creditos: 4,
     requisitos: ['Sistemas Operativos'],
-    catedraticoId: 'cat-carlos',
-    calificacion: 65,
-    descripcion: 'Estructura de procesadores, jerarquía de memoria y rendimiento.',
-    horario: HorarioCurso(
-      inicio: '02:00',
-      fin: '03:30',
-      inicioEsPm: true,
-      finEsPm: true,
-    ),
     color: Color(0xFF1565C0),
     icono: Icons.computer_rounded,
+    descripcion: 'Estructura de procesadores, jerarquía de memoria y rendimiento.',
   ),
 ];

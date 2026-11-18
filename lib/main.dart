@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'data/datos_academicos_mock.dart';
@@ -50,6 +51,19 @@ class PromediUmApp extends StatelessWidget {
         brightness: Brightness.dark,
         seedColor: configuracion.seedColor,
       ),
+      
+      // 👇 2. Agregamos el builder global para controlar la barra de estado en toda la app
+      builder: (context, child) {
+        final esOscuro = Theme.of(context).brightness == Brightness.dark;
+        
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: esOscuro
+              ? SystemUiOverlayStyle.light // Iconos blancos para modo oscuro
+              : SystemUiOverlayStyle.dark,  // Iconos oscuros para modo claro
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+
       // Ruta inicial por la que arranca la app
       initialRoute: '/login',
       // Definición centralizada de rutas nombradas

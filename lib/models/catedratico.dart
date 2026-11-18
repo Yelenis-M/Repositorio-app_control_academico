@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart'; // Asegúrate de importar tu archivo de colores
 
 /// Profesor creado por el usuario. Los datos viven en memoria hasta que
 /// se conecte Firestore.
@@ -8,15 +9,15 @@ class Catedratico {
     required this.nombre,
     required this.correo,
     required this.telefono,
-    required this.color,
+    Color? color, // Ahora es opcional (nullable en el parámetro)
     this.horarioOficina = '',
-  });
+  }) : color = color ?? AppColors.primary; // 👈 Si es null, asigna el color primario por defecto
 
   final String id;
   final String nombre;
   final String correo;
   final String telefono;
-  final Color color;
+  final Color color; // Ya no es nullable, siempre tendrá un color seguro
   final String horarioOficina;
 
   Catedratico copyWith({

@@ -1,5 +1,5 @@
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'app_colors.dart';
 
 class AppTheme {
@@ -34,6 +34,16 @@ class AppTheme {
       scaffoldBackgroundColor: esOscuro
           ? AppColors.darkBackground
           : AppColors.lightBackground,
+      
+      // 👇 Configuración global del AppBar y la barra de estado del sistema
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        systemOverlayStyle: esOscuro
+            ? SystemUiOverlayStyle.light // Iconos blancos para la barra de estado en modo oscuro
+            : SystemUiOverlayStyle.dark,  // Iconos oscuros para la barra de estado en modo claro
+      ),
     );
 
     final borde = OutlineInputBorder(

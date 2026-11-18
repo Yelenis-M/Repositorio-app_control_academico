@@ -140,7 +140,8 @@ class _EditarCursoViewState extends State<EditarCursoView> {
               AppCard(
                 padding: EdgeInsets.zero,
                 child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   leading: Icon(
                     Icons.palette_outlined,
                     color: esquema.primary,
@@ -169,7 +170,8 @@ class _EditarCursoViewState extends State<EditarCursoView> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: iconosMateria.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 6,
                     mainAxisSpacing: 8,
                     crossAxisSpacing: 8,
@@ -460,9 +462,10 @@ class _EditarCursoViewState extends State<EditarCursoView> {
     if (inicioTexto.isEmpty || finTexto.isEmpty) {
       return 'Completa el horario de inicio y de fin (00:00).';
     }
+    // HorarioCurso.normalizarHora ya valida formato y rango (00:00–12:00).
     if (HorarioCurso.normalizarHora(inicioTexto) == null ||
         HorarioCurso.normalizarHora(finTexto) == null) {
-      return 'Usa el formato 00:00 y define si es AM o PM.';
+      return 'Usa una hora entre 00:00 y 12:00 y define si es AM o PM.';
     }
     return null;
   }
@@ -522,11 +525,12 @@ class _FilaHora extends StatelessWidget {
               child: AppTextField(
                 controller: controller,
                 hint: '00:00',
-                keyboardType: TextInputType.datetime,
+                keyboardType: TextInputType.number,
                 textInputAction: TextInputAction.next,
                 inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9:]')),
-                  LengthLimitingTextInputFormatter(5),
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(4),
+                  _FormateadorHora(),
                 ],
                 onChanged: (_) => onChanged(),
               ),
@@ -542,6 +546,49 @@ class _FilaHora extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// Inserta automáticamente los dos puntos al escribir el tercer dígito
+/// (HHMM -> HH:MM) y preserva la posición del cursor al editar en el medio.
+class _FormateadorHora extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digitos = newValue.text.replaceAll(RegExp(r'\D'), '');
+    final limitado = digitos.length > 4 ? digitos.substring(0, 4) : digitos;
+
+    final buffer = StringBuffer();
+    for (var i = 0; i < limitado.length; i++) {
+      // Solo insertamos ':' cuando ya hay al menos 3 dígitos,
+      // así "12" no se muestra como "12:".
+      if (i == 2 && limitado.length > 2) buffer.write(':');
+      buffer.write(limitado[i]);
+    }
+    final texto = buffer.toString();
+
+    // Cuántos dígitos había antes del cursor en el texto crudo.
+    final cursorCrudo =
+        newValue.selection.baseOffset.clamp(0, newValue.text.length);
+    final digitosAntesDelCursor = newValue.text
+        .substring(0, cursorCrudo)
+        .replaceAll(RegExp(r'\D'), '')
+        .length;
+
+    // Reubicamos el cursor contando solo dígitos en el texto formateado.
+    var offset = 0;
+    var contados = 0;
+    while (offset < texto.length && contados < digitosAntesDelCursor) {
+      if (texto[offset] != ':') contados++;
+      offset++;
+    }
+
+    return TextEditingValue(
+      text: texto,
+      selection: TextSelection.collapsed(offset: offset),
     );
   }
 }

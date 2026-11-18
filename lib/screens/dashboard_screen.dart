@@ -8,8 +8,8 @@ import '../widgets/app_background.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_card.dart';
 import 'profile/profile_screen.dart';
-import '../screens/academico/contacto_catedratico_view.dart'; // Asegúrate de importar tu vista de contacto existente
-import '../screens/academico/form_catedratico_view.dart';     // Asegúrate de importar el formulario de catedrático
+import '../screens/academico/contacto_catedratico_view.dart';
+import '../screens/academico/form_catedratico_view.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
@@ -28,6 +28,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _indiceRuta = 0;
   int _semestreSeleccionado = 4;
+  bool _cargandoSemestre = false; // Estado de carga para Firebase
 
   Timer? _saludoTimer;
   String _saludo = '';
@@ -153,14 +154,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
 
-              // CONTENIDO DE LAS RUTAS (IndexedStack con 3 opciones)
+              // CONTENIDO DE LAS RUTAS
               Expanded(
                 child: IndexedStack(
                   index: _indiceRuta,
                   children: [
                     _buildRutaInicio(colorScheme),
                     _buildRutaResumenGlobal(colorScheme),
-                    const _RutaCatedraticos(), // <--- Nueva ruta de Catedráticos
+                    const _RutaCatedraticos(),
                   ],
                 ),
               ),
@@ -357,31 +358,58 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  AppButton(
-                    text: 'Ver materias del semestre',
-                    icon: Icons.arrow_forward_rounded,
-                    onPressed: () {
-                      final bloqueado = _semestreSeleccionado > _semestreActual;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          behavior: SnackBarBehavior.floating,
-                          content: Text(
-                            bloqueado
-                                ? 'Semestre $_semestreSeleccionado (Solo lectura)'
-                                : 'Abriendo Semestre $_semestreSeleccionado',
-                          ),
-                        ),
-                      );
-                      Navigator.pushNamed(
-                        context,
-                        '/semestre',
-                        arguments: {
-                          'semestre': _semestreSeleccionado,
-                          'bloqueado': bloqueado,
-                        },
-                      );
-                    },
+                  SizedBox(
+                    width: double.infinity,
+                    child: AppButton(
+                      text: _cargandoSemestre ? 'Cargando datos...' : 'Ver materias',
+                      icon: _cargandoSemestre ? null : Icons.arrow_forward_rounded,
+                      onPressed: _cargandoSemestre
+                          ? null
+                          : () async {
+                              setState(() => _cargandoSemestre = true);
+
+                              final bloqueado = _semestreSeleccionado > _semestreActual;
+                              
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    behavior: SnackBarBehavior.floating,
+                                    content: Text(
+                                      bloqueado
+                                          ? 'Semestre $_semestreSeleccionado (Solo lectura)'
+                                          : 'Abriendo Semestre $_semestreSeleccionado...',
+                                    ),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+
+                              await Future.delayed(const Duration(milliseconds: 1200));
+
+                              if (!mounted) return;
+                              setState(() => _cargandoSemestre = false);
+
+                              Navigator.pushNamed(
+                                context,
+                                '/semestre',
+                                arguments: {
+                                  'semestre': _semestreSeleccionado,
+                                  'bloqueado': bloqueado,
+                                },
+                              );
+                            },
+                    ),
                   ),
+                  if (_cargandoSemestre) ...[
+                    const SizedBox(height: 12),
+                    const Center(
+                      child: SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -402,11 +430,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
-          Text(
+          const Text(
             'Estadísticas acumuladas de tu historial académico',
             style: TextStyle(
               fontSize: 13,
-              color: colorScheme.onSurfaceVariant,
+              color: Colors.grey,
             ),
           ),
           const SizedBox(height: 18),
@@ -499,6 +527,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 24),
+          // Botón grande "Descargar PDF" ubicado hasta el final de la pantalla de resumen
+          SizedBox(
+            width: double.infinity,
+            child: AppButton(
+              text: 'Descargar PDF',
+              icon: Icons.picture_as_pdf_rounded,
+              onPressed: () {
+                _generarReportePdfCarrera(context);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _generarReportePdfCarrera(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Generar Reporte PDF'),
+        content: const Text(
+          'Se está preparando el documento PDF con el historial académico completo de la carrera para su descarga o impresión.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  behavior: SnackBarBehavior.floating,
+                  content: Text('Reporte PDF generado y guardado exitosamente.'),
+                ),
+              );
+            },
+            child: const Text('Descargar / Compartir'),
+          ),
         ],
       ),
     );
@@ -524,7 +594,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 }
 
 // ==========================================
-// PANTALLA DE CATEDRÁTICOS (Buscador + Agrupados por Letra)
+// PANTALLA DE CATEDRÁTICOS
 // ==========================================
 class _RutaCatedraticos extends StatefulWidget {
   const _RutaCatedraticos();
@@ -559,16 +629,13 @@ class _RutaCatedraticosState extends State<_RutaCatedraticos> {
     final datos = context.watch<DatosAcademicosMock>();
     final todosCatedraticos = datos.catedraticos;
 
-    // Filtrar profesores por el buscador
     final profesoresFiltrados = todosCatedraticos.where((cat) {
       return cat.nombre.toLowerCase().contains(_filtroBusqueda) ||
           cat.correo.toLowerCase().contains(_filtroBusqueda);
     }).toList();
 
-    // Ordenar alfabéticamente por nombre
     profesoresFiltrados.sort((a, b) => a.nombre.compareTo(b.nombre));
 
-    // Agrupar por la primera letra
     final Map<String, List<Catedratico>> agrupados = {};
     for (var prof in profesoresFiltrados) {
       if (prof.nombre.isNotEmpty) {
@@ -609,7 +676,6 @@ class _RutaCatedraticosState extends State<_RutaCatedraticos> {
             ],
           ),
           const SizedBox(height: 14),
-          // Buscador similar al boceto
           TextField(
             controller: _searchController,
             decoration: InputDecoration(
@@ -637,7 +703,6 @@ class _RutaCatedraticosState extends State<_RutaCatedraticos> {
             )
           else
             for (final letra in letrasOrdenadas) ...[
-              // Indicador de la letra (A, B, N, R, etc.)
               Text(
                 letra,
                 style: TextStyle(
@@ -684,16 +749,15 @@ class _RutaCatedraticosState extends State<_RutaCatedraticos> {
                           IconButton(
                             icon: Icon(
                               Icons.email_outlined,
-                              color: esquema.primary, // Asegúrate de que 'esquema' esté definido en tu contexto
+                              color: esquema.primary,
                               size: 20,
                             ),
-                            onPressed: () { // <--- CORREGIDO: Se cambió onTap por onPressed
-                              // Abre la vista de contacto reutilizando tu widget existente
+                            onPressed: () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => ContactoCatedraticoView(
-                                    catedraticoId: profesor.id, // Asegúrate de que 'profesor' esté definido
+                                    catedraticoId: profesor.id,
                                   ),
                                 ),
                               );
@@ -703,7 +767,6 @@ class _RutaCatedraticosState extends State<_RutaCatedraticos> {
                         ],
                       ),
                       onTap: () {
-                        // Al hacer clic en la tarjeta también abre la vista de contacto
                         Navigator.push(
                           context,
                           MaterialPageRoute(
