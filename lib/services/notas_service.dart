@@ -3,12 +3,11 @@ import '../models/curso_model.dart';
 
 typedef ListaCursos = List<CursoModel>;
 typedef MapaDatos = Map<String, dynamic>;
-typedef ListaMapas = List<MapaDatos>;
 
 class NotasService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // 1. Algoritmo de bloqueo: calcula el semestre máximo habilitado según año de ingreso
+  // 1. Algoritmo de bloqueo por año de ingreso (Regla 1: Semestre completo)
   int getSemestreMaximoHabilitado(int anioIngreso) {
     final now = DateTime.now();
     final anioActual = now.year;
@@ -29,7 +28,7 @@ class NotasService {
     return numeroSemestre > maximoHabilitado;
   }
 
-  // 2. LEER (R): Trae los cursos del semestre ordenados por nombre + nota + catedrático
+  // 2. LEER (R): Trae cursos del semestre + valida prerrequisitos (Soporta múltiples pénsums)
   Future<ListaCursos> obtenerCursosPorSemestre(
     String carnet,
     String carreraId,
@@ -55,18 +54,37 @@ class NotasService {
       if (data['nota'] != null) {
         mapaNotas[doc.id] = (data['nota'] as num).toDouble();
       }
-      if (data['catedratico'] != null) {
-        mapaCatedraticos[doc.id] = data['catedratico'].toString();
+      if (data['catedratico'] != null &&
+          data['catedratico'].toString().trim().isNotEmpty) {
+        mapaCatedraticos[doc.id] = data['catedratico'].toString().trim();
       }
     }
 
+    final regExpCodigos = RegExp(r'[A-Z]{4}\d{4}');
+
     final lista = pensumSnapshot.docs.map((doc) {
-      final codigoCurso = doc.id;
+      final data = doc.data();
+      final codigoCurso = (data['codigo'] ?? doc.id).toString();
+      final textoPrereq = (data['prerequisitos'] ?? 'Ninguno').toString();
+
+      final coincidencias = regExpCodigos.allMatches(textoPrereq);
+      final List<String> faltantes = [];
+
+      for (var match in coincidencias) {
+        final codigoReq = match.group(0)!;
+        final notaReq = mapaNotas[codigoReq];
+        if (notaReq == null || notaReq < 61.0) {
+          faltantes.add(codigoReq);
+        }
+      }
+
       return CursoModel.fromMap(
-        doc.data(),
-        codigoCurso,
+        data,
+        doc.id,
         nota: mapaNotas[codigoCurso],
         catedratico: mapaCatedraticos[codigoCurso],
+        bloqueadoPorPrerequisito: faltantes.isNotEmpty,
+        prerequisitosFaltantes: faltantes.join(', '),
       );
     }).toList();
 
@@ -74,21 +92,29 @@ class NotasService {
     return lista;
   }
 
-  // 3. CREAR / ACTUALIZAR (C / U): Guarda o edita nota y catedrático, y recalcula promedios
+  // 3. CREAR / ACTUALIZAR (C / U): Guarda o sobreescribe nota y catedrático del curso
   Future<void> guardarNota(
     String carnet,
     String codigoCurso,
     double nota, {
     String? catedratico,
+    String? horario, // <-- Nuevo campo opcional de horario para el curso
     String carreraId = 'sistemas',
   }) async {
-    final MapaDatos datosGuardar = {
+    final Map<String, dynamic> datosGuardar = {
       'nota': nota,
       'fecha_actualizacion': FieldValue.serverTimestamp(),
     };
 
+    if (nota < 0) nota = 0;
+    if (nota > 100) nota = 100;
+
     if (catedratico != null) {
       datosGuardar['catedratico'] = catedratico.trim();
+    }
+
+    if (horario != null) {
+      datosGuardar['horario'] = horario.trim(); // <-- Guarda el string del horario (ej. "Viernes, 9:00 am a 11:00 pm")
     }
 
     await _firestore
@@ -98,8 +124,16 @@ class NotasService {
         .doc(codigoCurso)
         .set(datosGuardar, SetOptions(merge: true));
 
-    final cursoDoc = await _firestore.collection('cursos').doc(codigoCurso).get();
-    final int semestre = (cursoDoc.data()?['semestre'] as num?)?.toInt() ?? 1;
+    final cursoQuery = await _firestore
+        .collection('cursos')
+        .where('carrera_id', isEqualTo: carreraId)
+        .where('codigo', isEqualTo: codigoCurso)
+        .limit(1)
+        .get();
+
+    final int semestre = cursoQuery.docs.isNotEmpty
+        ? ((cursoQuery.docs.first.data()['semestre'] as num?)?.toInt() ?? 1)
+        : 1;
 
     await obtenerResumenPorSemestre(carnet, carreraId, semestre);
     await obtenerResumenGlobal(carnet, carreraId);
@@ -111,8 +145,16 @@ class NotasService {
     String codigoCurso, {
     String carreraId = 'sistemas',
   }) async {
-    final cursoDoc = await _firestore.collection('cursos').doc(codigoCurso).get();
-    final int semestre = (cursoDoc.data()?['semestre'] as num?)?.toInt() ?? 1;
+    final cursoQuery = await _firestore
+        .collection('cursos')
+        .where('carrera_id', isEqualTo: carreraId)
+        .where('codigo', isEqualTo: codigoCurso)
+        .limit(1)
+        .get();
+
+    final int semestre = cursoQuery.docs.isNotEmpty
+        ? ((cursoQuery.docs.first.data()['semestre'] as num?)?.toInt() ?? 1)
+        : 1;
 
     await _firestore
         .collection('usuarios')
@@ -125,7 +167,7 @@ class NotasService {
     await obtenerResumenGlobal(carnet, carreraId);
   }
 
-  // 5. Estadísticas de UN semestre específico (y sincroniza en usuarios/{carnet}/semestres)
+  // 5. Estadísticas de UN semestre específico
   Future<MapaDatos> obtenerResumenPorSemestre(
     String carnet,
     String carreraId,
@@ -177,7 +219,7 @@ class NotasService {
     return resumenSemestre;
   }
 
-  // 6. Estadísticas globales de toda la carrera (y sincroniza en el documento del usuario)
+  // 6. Estadísticas globales de toda la carrera
   Future<MapaDatos> obtenerResumenGlobal(
     String carnet,
     String carreraId,
@@ -208,8 +250,8 @@ class NotasService {
     int cursosEvaluados = 0;
 
     for (var doc in cursosSnapshot.docs) {
-      final codigo = doc.id;
       final data = doc.data();
+      final codigo = (data['codigo'] ?? doc.id).toString();
       final creditos = (data['creditos'] as num?)?.toInt() ?? 0;
 
       if (notasMap.containsKey(codigo)) {
@@ -246,56 +288,5 @@ class NotasService {
       'creditosAcumulados': creditosAcumulados,
       'promedioGlobal': promedio,
     };
-  }
-
-  // 7. CRUD CATEDRÁTICOS - CREAR (C)
-  Future<void> guardarCatedratico({
-    required String nombre,
-    String especialidad = '',
-    String correo = '',
-    String telefono = '',
-  }) async {
-    await _firestore.collection('catedraticos').add({
-      'nombre': nombre.trim(),
-      'especialidad': especialidad.trim(),
-      'correo': correo.trim(),
-      'telefono': telefono.trim(),
-      'fecha_registro': FieldValue.serverTimestamp(),
-    });
-  }
-
-  // 8. CRUD CATEDRÁTICOS - LEER (R)
-  Future<ListaMapas> obtenerCatedraticos() async {
-    final snapshot = await _firestore
-        .collection('catedraticos')
-        .orderBy('nombre')
-        .get();
-
-    return snapshot.docs.map((doc) {
-      final data = doc.data();
-      data['id'] = doc.id;
-      return data;
-    }).toList();
-  }
-
-  // 9. CRUD CATEDRÁTICOS - ACTUALIZAR (U)
-  Future<void> actualizarCatedratico({
-    required String idDocumento,
-    required String nombre,
-    String especialidad = '',
-    String correo = '',
-    String telefono = '',
-  }) async {
-    await _firestore.collection('catedraticos').doc(idDocumento).update({
-      'nombre': nombre.trim(),
-      'especialidad': especialidad.trim(),
-      'correo': correo.trim(),
-      'telefono': telefono.trim(),
-    });
-  }
-
-  // 10. CRUD CATEDRÁTICOS - ELIMINAR (D)
-  Future<void> eliminarCatedratico(String idDocumento) async {
-    await _firestore.collection('catedraticos').doc(idDocumento).delete();
   }
 }

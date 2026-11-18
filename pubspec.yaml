@@ -38,6 +38,10 @@ dependencies:
   cloud_firestore: ^7.1.0
   firebase_auth: ^7.0.1
   google_sign_in: 6.2.2
+  image_picker: ^1.2.4
+  permission_handler: ^13.0.2
+  pdf: ^3.13.1
+  printing: ^5.15.1
 
 dev_dependencies:
   flutter_test:

@@ -134,4 +134,41 @@ class AuthService {
     await _auth.signOut();
     usuarioActual = null;
   }
+
+  // 6. Verifica al abrir la app si ya hay una sesión activa en el celular (Funciona Offline)
+  Future<UsuarioModel?> verificarSesionActiva() async {
+    final userFirebase = _auth.currentUser;
+    if (userFirebase == null || userFirebase.email == null) {
+      return null;
+    }
+
+    try {
+      // Busca el perfil en Firestore (si no hay internet, lo saca de la caché local del teléfono)
+      final query = await _firestore
+          .collection('usuarios')
+          .where('correo', isEqualTo: userFirebase.email)
+          .limit(1)
+          .get();
+
+      if (query.docs.isNotEmpty) {
+        final doc = query.docs.first;
+        usuarioActual = UsuarioModel.fromMap(doc.data(), doc.id);
+        return usuarioActual;
+      }
+    } catch (_) {
+      // Si falla la red, intenta leer explícitamente desde la caché local del dispositivo
+      final queryCache = await _firestore
+          .collection('usuarios')
+          .where('correo', isEqualTo: userFirebase.email)
+          .limit(1)
+          .get(const GetOptions(source: Source.cache));
+
+      if (queryCache.docs.isNotEmpty) {
+        final doc = queryCache.docs.first;
+        usuarioActual = UsuarioModel.fromMap(doc.data(), doc.id);
+        return usuarioActual;
+      }
+    }
+    return null;
+  }
 }
