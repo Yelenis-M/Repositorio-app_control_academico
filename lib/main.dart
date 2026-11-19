@@ -1,14 +1,18 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'data/datos_academicos_mock.dart';
+import 'firebase_options.dart';
 import 'screens/academico/semestre_view.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/settings/settings_screen.dart';
-import 'theme/theme_provider.dart';
+import 'services/auth_service.dart';
 import 'theme/app_theme.dart';
+import 'theme/theme_provider.dart';
 
 // Llave global de navegación para controlar rutas sin depender del context directo
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -16,23 +20,47 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Crear y cargar las preferencias del usuario desde SharedPreferences
+  // 1. Inicializar Firebase y activar caché offline ilimitado
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: true,
+    cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+  );
+
+  // 2. Cargar preferencias de apariencia (SharedPreferences)
   final themeProvider = ThemeProvider();
   await themeProvider.loadPreferences();
+
+  // 3. Auto-Login (funciona incluso sin internet desde caché local)
+  final authService = AuthService();
+  final datosAcademicos = DatosAcademicosMock();
+  final usuarioActivo = await authService.verificarSesionActiva();
+  if (usuarioActivo != null) {
+    await datosAcademicos.cargarDatosUsuario(usuarioActivo);
+  }
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: themeProvider),
-        ChangeNotifierProvider(create: (_) => DatosAcademicosMock()),
+        ChangeNotifierProvider.value(value: datosAcademicos),
       ],
-      child: const PromediUmApp(),
+      child: PromediUmApp(
+        initialRoute: usuarioActivo != null ? '/dashboard' : '/login',
+      ),
     ),
   );
 }
 
 class PromediUmApp extends StatelessWidget {
-  const PromediUmApp({super.key});
+  const PromediUmApp({
+    super.key,
+    this.initialRoute = '/login',
+  });
+
+  final String initialRoute;
 
   @override
   Widget build(BuildContext context) {
@@ -51,52 +79,48 @@ class PromediUmApp extends StatelessWidget {
         brightness: Brightness.dark,
         seedColor: configuracion.seedColor,
       ),
-      
-      // 👇 2. Agregamos el builder global para controlar la barra de estado en toda la app
       builder: (context, child) {
         final esOscuro = Theme.of(context).brightness == Brightness.dark;
-        
+
         return AnnotatedRegion<SystemUiOverlayStyle>(
           value: esOscuro
-              ? SystemUiOverlayStyle.light // Iconos blancos para modo oscuro
-              : SystemUiOverlayStyle.dark,  // Iconos oscuros para modo claro
+              ? SystemUiOverlayStyle.light
+              : SystemUiOverlayStyle.dark,
           child: child ?? const SizedBox.shrink(),
         );
       },
-
-      // Ruta inicial por la que arranca la app
-      initialRoute: '/login',
-      // Definición centralizada de rutas nombradas
+      initialRoute: initialRoute,
       routes: {
         '/login': (context) => LoginScreen(
               onSignInWithUser: (usuario, contrasena) async {
-                await Future.delayed(const Duration(seconds: 1));
-                if (usuario == 'error@upana.edu.gt' || contrasena == 'error') {
-                  throw Exception('wrong-password');
-                }
-                // Navega al dashboard limpiando el historial del login
+                final auth = AuthService();
+                final datos = context.read<DatosAcademicosMock>();
+                final usuarioLogueado = await auth.login(usuario, contrasena);
+                await datos.cargarDatosUsuario(usuarioLogueado);
                 navigatorKey.currentState?.pushReplacementNamed('/dashboard');
               },
               onSignInWithGoogle: () async {
-                await Future.delayed(const Duration(seconds: 1));
+                final auth = AuthService();
+                final datos = context.read<DatosAcademicosMock>();
+                final usuarioLogueado = await auth.loginConGoogle();
+                if (usuarioLogueado == null) return; // Cerró ventana de Google
+                await datos.cargarDatosUsuario(usuarioLogueado);
                 navigatorKey.currentState?.pushReplacementNamed('/dashboard');
               },
               onSendPasswordReset: (correo) async {
-                await Future.delayed(const Duration(seconds: 1));
-                if (correo.contains('error') || correo.contains('noautorizado')) {
-                  throw Exception('correo-no-autorizado');
-                }
+                await AuthService().enviarCorreoRecuperacion(correo);
               },
             ),
         '/dashboard': (context) => DashboardScreen(
-              onLogout: () {
-                // Cierra sesión limpiando todo y volviendo al login
+              onLogout: () async {
+                final datos = context.read<DatosAcademicosMock>();
+                await AuthService().logout();
+                datos.limpiarSesion();
                 navigatorKey.currentState?.pushNamedAndRemoveUntil(
                   '/login',
                   (route) => false,
                 );
               },
-              // Conectamos la apertura de semestres mediante rutas nombradas con argumentos
               onOpenSemester: (semestre, bloqueado) {
                 navigatorKey.currentState?.pushNamed(
                   '/semestre',
@@ -108,8 +132,6 @@ class PromediUmApp extends StatelessWidget {
               },
             ),
         '/settings': (context) => const SettingsScreen(),
-        
-        // Ruta para el Detalle del Semestre (Pantalla 3)
         '/semestre': (context) {
           final args =
               ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;

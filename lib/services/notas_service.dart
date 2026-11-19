@@ -145,7 +145,8 @@ class NotasService {
         .doc(carnet)
         .collection('notas')
         .doc(codigoCurso)
-        .set(datosGuardar, SetOptions(merge: true));
+        .set(datosGuardar, SetOptions(merge: true))
+        .timeout(const Duration(seconds: 3), onTimeout: () {});
 
     final cursoQuery = await _firestore
         .collection('cursos')
@@ -200,7 +201,8 @@ class NotasService {
         .doc(carnet)
         .collection('notas')
         .doc(codigoCurso)
-        .delete();
+        .delete()
+        .timeout(const Duration(seconds: 3), onTimeout: () {});
 
     await obtenerResumenPorSemestre(carnet, carreraId, semestre);
     await obtenerResumenGlobal(carnet, carreraId);
@@ -253,9 +255,73 @@ class NotasService {
         .doc(carnet)
         .collection('semestres')
         .doc('semestre_$semestre')
-        .set(resumenSemestre, SetOptions(merge: true));
+        .set(resumenSemestre, SetOptions(merge: true))
+        .timeout(const Duration(seconds: 3), onTimeout: () {});
 
     return resumenSemestre;
+  }
+
+  // Carga los 11 semestres en solo 2 lecturas de Firestore (ideal para login y modo offline)
+  Future<ListaCursos> obtenerTodosLosCursos(
+    String carnet,
+    String carreraId,
+  ) async {
+    final pensumSnapshot = await _firestore
+        .collection('cursos')
+        .where('carrera_id', isEqualTo: carreraId)
+        .get();
+
+    final notasSnapshot = await _firestore
+        .collection('usuarios')
+        .doc(carnet)
+        .collection('notas')
+        .get();
+
+    final Map<String, MapaDatos> mapaDatosUsuario = {};
+    final Map<String, double> mapaNotas = {};
+
+    for (var doc in notasSnapshot.docs) {
+      final data = doc.data();
+      mapaDatosUsuario[doc.id] = data;
+      if (data['nota'] != null) {
+        mapaNotas[doc.id] = (data['nota'] as num).toDouble();
+      }
+    }
+
+    final regExpCodigos = RegExp(r'[A-Z]{4}\d{4}');
+
+    final lista = pensumSnapshot.docs.map((doc) {
+      final data = doc.data();
+      final codigoCurso = (data['codigo'] ?? doc.id).toString();
+      final textoPrereq = (data['prerequisitos'] ?? 'Ninguno').toString();
+
+      final coincidencias = regExpCodigos.allMatches(textoPrereq);
+      final List<String> faltantes = [];
+
+      for (var match in coincidencias) {
+        final codigoReq = match.group(0)!;
+        final notaReq = mapaNotas[codigoReq];
+        if (notaReq == null || notaReq < 61.0) {
+          faltantes.add(codigoReq);
+        }
+      }
+
+      return Curso.fromMap(
+        data,
+        doc.id,
+        datosUsuario: mapaDatosUsuario[codigoCurso],
+        bloqueadoPorPrerequisito: faltantes.isNotEmpty,
+        prerequisitosFaltantes: faltantes.join(', '),
+      );
+    }).toList();
+
+    lista.sort((a, b) {
+      final cmpSem = a.semestre.compareTo(b.semestre);
+      if (cmpSem != 0) return cmpSem;
+      return a.nombre.compareTo(b.nombre);
+    });
+
+    return lista;
   }
 
   // 6. Estadísticas globales de toda la carrera
@@ -317,7 +383,10 @@ class NotasService {
       'cursos_reprobados': reprobados,
       'creditos_acumulados': creditosAcumulados,
       'cursos_evaluados': cursosEvaluados,
-    }, SetOptions(merge: true));
+    }, SetOptions(merge: true)).timeout(
+      const Duration(seconds: 3),
+      onTimeout: () {},
+    );
 
     return {
       'totalCursosPensum': cursosSnapshot.docs.length,

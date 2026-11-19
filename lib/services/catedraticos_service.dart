@@ -53,6 +53,32 @@ class CatedraticosService {
     return true;
   }
 
+  // Crea o actualiza usando el mismo ID que maneja el Frontend (evita desfase de IDs)
+  Future<void> guardarOActualizarPorId({
+    required String carnet,
+    required Catedratico catedratico,
+  }) async {
+    final docRef = catedratico.id.trim().isNotEmpty
+        ? _firestore
+            .collection('usuarios')
+            .doc(carnet)
+            .collection('catedraticos')
+            .doc(catedratico.id.trim())
+        : _firestore
+            .collection('usuarios')
+            .doc(carnet)
+            .collection('catedraticos')
+            .doc();
+
+    await docRef.set({
+      ...catedratico.toMap(),
+      'fecha_actualizacion': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true)).timeout(
+      const Duration(seconds: 3),
+      onTimeout: () {},
+    );
+  }
+
   // 2. LEER (R): Obtiene la lista de Catedratico del alumno ordenados por nombre
   Future<ListaCatedraticos> obtenerCatedraticos(String carnet) async {
     final snapshot = await _firestore

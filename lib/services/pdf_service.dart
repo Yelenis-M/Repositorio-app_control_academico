@@ -1,10 +1,11 @@
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import '../models/usuario_model.dart';
+import '../models/catedratico.dart';
 import '../models/curso.dart';
-import 'notas_service.dart';
+import '../models/usuario_model.dart';
 import 'catedraticos_service.dart';
+import 'notas_service.dart';
 
 typedef MapaSemestres = Map<int, List<Curso>>;
 
@@ -12,32 +13,67 @@ class PdfService {
   final NotasService _notasService = NotasService();
   final CatedraticosService _catedraticosService = CatedraticosService();
 
-  Future<void> generarYMostrarVidaAcademica(UsuarioModel usuario) async {
+  Future<void> generarYMostrarVidaAcademica(
+    UsuarioModel usuario, {
+    List<Curso>? cursosPrecargados,
+    List<Catedratico>? catedraticosPrecargados,
+  }) async {
     final pdf = pw.Document();
 
-    final resumenGlobal = await _notasService.obtenerResumenGlobal(
-      usuario.carnet,
-      usuario.carreraId,
-    );
+    final List<Curso> todosCursos = cursosPrecargados != null &&
+            cursosPrecargados.isNotEmpty
+        ? cursosPrecargados
+        : await _notasService.obtenerTodosLosCursos(
+            usuario.carnet,
+            usuario.carreraId,
+          );
 
-    // Mapa id -> nombre de catedráticos por si el curso solo tiene catedraticoId
-    final listaCatedraticos =
+    final List<Catedratico> listaCatedraticos = catedraticosPrecargados ??
         await _catedraticosService.obtenerCatedraticos(usuario.carnet);
+
     final Map<String, String> mapaNombresCat = {
       for (var cat in listaCatedraticos) cat.id: cat.nombre,
     };
 
+    // Calcular resumen global directamente en memoria (funciona 100% offline)
+    int aprobadosGlobal = 0;
+    int reprobadosGlobal = 0;
+    int creditosAcumulados = 0;
+    double sumaGlobal = 0.0;
+    int evaluadosGlobal = 0;
+
     final MapaSemestres cursosPorSemestre = {};
-    for (int s = 1; s <= 11; s++) {
-      final lista = await _notasService.obtenerCursosPorSemestre(
-        usuario.carnet,
-        usuario.carreraId,
-        s,
-      );
-      if (lista.isNotEmpty) {
-        cursosPorSemestre[s] = lista;
+    for (final c in todosCursos) {
+      cursosPorSemestre.putIfAbsent(c.semestre, () => []).add(c);
+      if (c.calificacion != null) {
+        evaluadosGlobal++;
+        sumaGlobal += c.calificacion!;
+        if (c.aprobado) {
+          aprobadosGlobal++;
+          creditosAcumulados += c.creditos;
+        } else {
+          reprobadosGlobal++;
+        }
       }
     }
+
+    final semestresOrdenados = cursosPorSemestre.keys.toList()..sort();
+    for (final s in semestresOrdenados) {
+      cursosPorSemestre[s]!.sort((a, b) => a.nombre.compareTo(b.nombre));
+    }
+
+    final promedioGlobal = evaluadosGlobal > 0
+        ? double.parse((sumaGlobal / evaluadosGlobal).toStringAsFixed(2))
+        : 0.0;
+
+    final resumenGlobal = {
+      'totalCursosPensum': todosCursos.length,
+      'cursosEvaluados': evaluadosGlobal,
+      'aprobados': aprobadosGlobal,
+      'reprobados': reprobadosGlobal,
+      'creditosAcumulados': creditosAcumulados,
+      'promedioGlobal': promedioGlobal,
+    };
 
     final etiquetaPensum =
         usuario.carreraId == 'sistemas_2026' ? 'Pénsum 2026' : 'Pénsum 2024';
@@ -52,8 +88,12 @@ class PdfService {
           pw.SizedBox(height: 10),
           _construirCajaResumenGlobal(resumenGlobal),
           pw.SizedBox(height: 14),
-          for (var entrada in cursosPorSemestre.entries) ...[
-            _construirBloqueSemestre(entrada.key, entrada.value, mapaNombresCat),
+          for (var semestre in semestresOrdenados) ...[
+            _construirBloqueSemestre(
+              semestre,
+              cursosPorSemestre[semestre]!,
+              mapaNombresCat,
+            ),
             pw.SizedBox(height: 12),
           ],
         ],
@@ -121,9 +161,9 @@ class PdfService {
         pw.SizedBox(height: 6),
         pw.Container(
           padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-          decoration: pw.BoxDecoration(
+          decoration: const pw.BoxDecoration(
             color: PdfColors.indigo50,
-            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+            borderRadius: pw.BorderRadius.all(pw.Radius.circular(4)),
           ),
           child: pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,

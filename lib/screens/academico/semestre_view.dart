@@ -246,7 +246,7 @@ class _SemestreViewState extends State<SemestreView> {
       MaterialPageRoute(
         builder: (_) => CursoView(
           cursoId: curso.id,
-          soloLectura: widget.esBloqueado,
+          soloLectura: widget.esBloqueado || curso.bloqueadoPorPrerequisito,
         ),
       ),
     );
@@ -410,13 +410,28 @@ class _TarjetaMateria extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text(
-                            etiquetaEstado(nota: nota, femenino: true),
-                            style: TextStyle(
-                              color: colorEstado,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                            ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (curso.bloqueadoPorPrerequisito) ...[
+                                Icon(
+                                  Icons.lock_outline,
+                                  size: 14,
+                                  color: esquema.onSurfaceVariant,
+                                ),
+                                const SizedBox(width: 4),
+                              ],
+                              Text(
+                                curso.bloqueadoPorPrerequisito && nota == null
+                                    ? 'Bloqueada'
+                                    : etiquetaEstado(nota: nota, femenino: true),
+                                style: TextStyle(
+                                  color: colorEstado,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

@@ -13,7 +13,7 @@ class AuthService {
   static UsuarioModel? usuarioActual;
 
   // 1. Iniciar sesión con Correo, Usuario o Carné + Contraseña
-  Future<UsuarioModel?> login(String identificador, String password) async {
+  Future<UsuarioModel> login(String identificador, String password) async {
     try {
       final String input = identificador.trim();
       Map<String, dynamic>? datosEstudiante;
@@ -51,14 +51,13 @@ class AuthService {
       }
 
       if (datosEstudiante == null || carnetDocId == null) {
-        return null;
+        throw Exception('usuario-no-existe');
       }
 
       final String correoRegistrado =
           (datosEstudiante['correo'] ?? '').toString().trim();
-
       if (correoRegistrado.isEmpty) {
-        return null;
+        throw Exception('correo-no-autorizado');
       }
 
       await _auth.signInWithEmailAndPassword(
@@ -67,10 +66,10 @@ class AuthService {
       );
 
       usuarioActual = UsuarioModel.fromMap(datosEstudiante, carnetDocId);
-      return usuarioActual;
+      return usuarioActual!;
     } on FirebaseAuthException catch (e) {
       debugPrint('Error de Firebase Auth (${e.code}): ${e.message}');
-      return null;
+      rethrow;
     } catch (e) {
       debugPrint('Error general al autenticar: $e');
       rethrow;
@@ -78,19 +77,18 @@ class AuthService {
   }
 
   // 2. Iniciar sesión con botón de Google (Validando que exista en Firestore)
+  // Devuelve null únicamente si el usuario cerró la ventana sin elegir cuenta.
   Future<UsuarioModel?> loginConGoogle() async {
     try {
-      // Forzar selector de cuenta para que siempre deje elegir el correo
       await _googleSignIn.signOut();
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
       if (googleUser == null) {
-        return null; // El usuario cerró la ventana sin elegir cuenta
+        return null; // Cancelado por el usuario
       }
 
       final String correoGoogle = googleUser.email.trim();
 
-      // Verificar primero si ese correo está autorizado en nuestra colección 'usuarios'
       final query = await _firestore
           .collection('usuarios')
           .where('correo', isEqualTo: correoGoogle)
@@ -98,15 +96,12 @@ class AuthService {
           .get();
 
       if (query.docs.isEmpty) {
-        // No es un estudiante registrado: cerramos la sesión de Google y denegamos acceso
         await _googleSignIn.signOut();
-        return null;
+        throw Exception('correo-no-autorizado');
       }
 
-      // Si sí existe en Firestore, obtenemos los tokens y autenticamos en Firebase Auth
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
-
       final OAuthCredential credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
@@ -123,9 +118,20 @@ class AuthService {
     }
   }
 
-  // 3. Enviar correo de recuperación de contraseña
+  // 3. Enviar correo de recuperación de contraseña (verificando que esté registrado)
   Future<void> enviarCorreoRecuperacion(String correo) async {
-    await _auth.sendPasswordResetEmail(email: correo.trim());
+    final correoLimpio = correo.trim();
+    final query = await _firestore
+        .collection('usuarios')
+        .where('correo', isEqualTo: correoLimpio)
+        .limit(1)
+        .get();
+
+    if (query.docs.isEmpty) {
+      throw Exception('correo-no-autorizado');
+    }
+
+    await _auth.sendPasswordResetEmail(email: correoLimpio);
   }
 
   // 4. Cerrar sesión completa
@@ -135,7 +141,7 @@ class AuthService {
     usuarioActual = null;
   }
 
-  // 6. Verifica al abrir la app si ya hay una sesión activa en el celular (Funciona Offline)
+  // 5. Verifica al abrir la app si ya hay una sesión activa en el celular (Funciona Offline)
   Future<UsuarioModel?> verificarSesionActiva() async {
     final userFirebase = _auth.currentUser;
     if (userFirebase == null || userFirebase.email == null) {
@@ -143,12 +149,12 @@ class AuthService {
     }
 
     try {
-      // Busca el perfil en Firestore (si no hay internet, lo saca de la caché local del teléfono)
       final query = await _firestore
           .collection('usuarios')
           .where('correo', isEqualTo: userFirebase.email)
           .limit(1)
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 3));
 
       if (query.docs.isNotEmpty) {
         final doc = query.docs.first;
@@ -156,17 +162,20 @@ class AuthService {
         return usuarioActual;
       }
     } catch (_) {
-      // Si falla la red, intenta leer explícitamente desde la caché local del dispositivo
-      final queryCache = await _firestore
-          .collection('usuarios')
-          .where('correo', isEqualTo: userFirebase.email)
-          .limit(1)
-          .get(const GetOptions(source: Source.cache));
+      try {
+        final queryCache = await _firestore
+            .collection('usuarios')
+            .where('correo', isEqualTo: userFirebase.email)
+            .limit(1)
+            .get(const GetOptions(source: Source.cache));
 
-      if (queryCache.docs.isNotEmpty) {
-        final doc = queryCache.docs.first;
-        usuarioActual = UsuarioModel.fromMap(doc.data(), doc.id);
-        return usuarioActual;
+        if (queryCache.docs.isNotEmpty) {
+          final doc = queryCache.docs.first;
+          usuarioActual = UsuarioModel.fromMap(doc.data(), doc.id);
+          return usuarioActual;
+        }
+      } catch (_) {
+        return null;
       }
     }
     return null;

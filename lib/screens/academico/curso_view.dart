@@ -31,14 +31,16 @@ class CursoView extends StatelessWidget {
     final esquema = Theme.of(context).colorScheme;
     final datos = context.watch<DatosAcademicosMock>();
     final curso = datos.buscarCurso(cursoId);
+    final bloqueadoTotal =
+        soloLectura || (curso?.bloqueadoPorPrerequisito ?? false);
 
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
-          // Si está en solo lectura, no mostramos los botones de edición ni borrado
-          if (!soloLectura) ...[
+          // Si está bloqueado o en solo lectura, no mostramos los botones de edición ni borrado
+          if (!bloqueadoTotal) ...[
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
               child: Material(
@@ -90,7 +92,7 @@ class CursoView extends StatelessWidget {
             : ListView(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
                 children: [
-                  if (soloLectura) ...[
+                  if (bloqueadoTotal) ...[
                     AppCard(
                       child: Row(
                         children: [
@@ -98,7 +100,9 @@ class CursoView extends StatelessWidget {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Semestre en solo lectura. No es posible editar ni borrar datos.',
+                              curso.bloqueadoPorPrerequisito
+                                  ? 'Curso bloqueado. Debes aprobar primero: ${curso.prerequisitosFaltantes}.'
+                                  : 'Semestre en solo lectura. No es posible editar ni borrar datos.',
                               style: TextStyle(color: esquema.onSurfaceVariant),
                             ),
                           ),

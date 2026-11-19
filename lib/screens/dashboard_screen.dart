@@ -1,15 +1,19 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../data/datos_academicos_mock.dart';
 import '../models/catedratico.dart';
+import '../services/auth_service.dart';
+import '../services/pdf_service.dart';
+import '../services/perfil_service.dart';
 import '../theme/theme_provider.dart';
 import '../widgets/app_background.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_card.dart';
-import 'profile/profile_screen.dart';
 import '../screens/academico/contacto_catedratico_view.dart';
 import '../screens/academico/form_catedratico_view.dart';
+import 'profile/profile_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
@@ -26,22 +30,16 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  int _indiceRuta = 0;
-  int _semestreSeleccionado = 4;
-  bool _cargandoSemestre = false; // Estado de carga para Firebase
+  final PerfilService _perfilService = PerfilService();
+  final PdfService _pdfService = PdfService();
 
+  int _indiceRuta = 0;
+  int? _semestreSeleccionado;
+  bool _generandoPdf = false;
   Timer? _saludoTimer;
   String _saludo = '';
 
-  final String _primerNombre = 'Yelenis';
-  final String _nombreCompleto = 'Yelenis Andrea Marroquín López';
-  final String _carne = '000150079';
-  final String _carrera = 'Ingeniería en Sistemas';
-  final String _universidad = 'Universidad Panamericana';
-  final String _correo = '000150079@upana.edu.gt';
-  final int _semestreActual = 4;
-  final int _totalSemestres = 10;
-  final String? _fotoPerfilUrl = null;
+  static const String _universidad = 'Universidad Panamericana';
 
   @override
   void initState() {
@@ -79,8 +77,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
+    final datos = context.watch<DatosAcademicosMock>();
+    final usuario = datos.usuarioActual;
     final colorScheme = Theme.of(context).colorScheme;
     final esOscuro = Theme.of(context).brightness == Brightness.dark;
+
+    final nombreCompleto = (usuario?.nombre.trim().isNotEmpty ?? false)
+        ? usuario!.nombre.trim()
+        : 'Estudiante';
+    final primerNombre = nombreCompleto.split(' ').first;
+    final bytesFoto = _perfilService.decodificarFoto(usuario?.fotoBase64);
 
     return Scaffold(
       body: AppBackground(
@@ -93,15 +99,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Row(
                   children: [
                     GestureDetector(
-                      onTap: () => _abrirPerfil(context),
+                      onTap: () => _abrirPerfil(context, datos),
                       child: CircleAvatar(
                         radius: 22,
                         backgroundColor:
                             colorScheme.primary.withValues(alpha: 0.2),
-                        backgroundImage: _fotoPerfilUrl != null
-                            ? NetworkImage(_fotoPerfilUrl)
-                            : null,
-                        child: _fotoPerfilUrl == null
+                        backgroundImage:
+                            bytesFoto != null ? MemoryImage(bytesFoto) : null,
+                        child: bytesFoto == null
                             ? Icon(
                                 Icons.person_rounded,
                                 color: colorScheme.primary,
@@ -113,7 +118,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: GestureDetector(
-                        onTap: () => _abrirPerfil(context),
+                        onTap: () => _abrirPerfil(context, datos),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -125,7 +130,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ),
                             ),
                             Text(
-                              _primerNombre,
+                              primerNombre,
                               style: const TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
@@ -153,17 +158,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
               ),
-
               // CONTENIDO DE LAS RUTAS
               Expanded(
-                child: IndexedStack(
-                  index: _indiceRuta,
-                  children: [
-                    _buildRutaInicio(colorScheme),
-                    _buildRutaResumenGlobal(colorScheme),
-                    const _RutaCatedraticos(),
-                  ],
-                ),
+                child: datos.cargando && datos.todosLosCursos.isEmpty
+                    ? const Center(child: CircularProgressIndicator())
+                    : IndexedStack(
+                        index: _indiceRuta,
+                        children: [
+                          _buildRutaInicio(colorScheme, datos),
+                          _buildRutaResumenGlobal(colorScheme, datos),
+                          const _RutaCatedraticos(),
+                        ],
+                      ),
               ),
             ],
           ),
@@ -195,8 +201,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildRutaInicio(ColorScheme colorScheme) {
-    final double progreso = _semestreActual / _totalSemestres;
+  Widget _buildRutaInicio(ColorScheme colorScheme, DatosAcademicosMock datos) {
+    final usuario = datos.usuarioActual;
+    final carne = usuario?.carnet ?? '---';
+    final carrera = (usuario?.carrera.trim().isNotEmpty ?? false)
+        ? usuario!.carrera
+        : 'Ingeniería en Sistemas';
+    final totalSemestres = datos.totalSemestres;
+    final semestreActual =
+        datos.semestreMaximoHabilitado.clamp(1, totalSemestres);
+    final semestreElegido =
+        (_semestreSeleccionado ?? semestreActual).clamp(1, totalSemestres);
+    final double progreso = (semestreActual / totalSemestres).clamp(0.0, 1.0);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
@@ -219,7 +235,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      'ID: $_carne',
+                      'ID: $carne',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
@@ -229,7 +245,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    _carrera,
+                    carrera,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 19,
@@ -274,7 +290,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
                       Text(
-                        'Semestre $_semestreActual / $_totalSemestres',
+                        'Semestre $semestreActual / $totalSemestres',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -327,16 +343,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<int>(
-                        value: _semestreSeleccionado,
+                        value: semestreElegido,
                         isExpanded: true,
-                        items: List.generate(_totalSemestres, (i) => i + 1)
+                        items: List.generate(totalSemestres, (i) => i + 1)
                             .map(
                               (sem) => DropdownMenuItem(
                                 value: sem,
                                 child: Row(
                                   children: [
                                     Text('Semestre $sem'),
-                                    if (sem > _semestreActual) ...[
+                                    if (datos.estaSemestreBloqueado(sem)) ...[
                                       const SizedBox(width: 8),
                                       const Icon(
                                         Icons.lock_outline,
@@ -361,55 +377,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: AppButton(
-                      text: _cargandoSemestre ? 'Cargando datos...' : 'Ver materias',
-                      icon: _cargandoSemestre ? null : Icons.arrow_forward_rounded,
-                      onPressed: _cargandoSemestre
-                          ? null
-                          : () async {
-                              setState(() => _cargandoSemestre = true);
-
-                              final bloqueado = _semestreSeleccionado > _semestreActual;
-                              
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    behavior: SnackBarBehavior.floating,
-                                    content: Text(
-                                      bloqueado
-                                          ? 'Semestre $_semestreSeleccionado (Solo lectura)'
-                                          : 'Abriendo Semestre $_semestreSeleccionado...',
-                                    ),
-                                    duration: const Duration(seconds: 2),
-                                  ),
-                                );
-                              }
-
-                              await Future.delayed(const Duration(milliseconds: 1200));
-
-                              if (!mounted) return;
-                              setState(() => _cargandoSemestre = false);
-
-                              Navigator.pushNamed(
-                                context,
-                                '/semestre',
-                                arguments: {
-                                  'semestre': _semestreSeleccionado,
-                                  'bloqueado': bloqueado,
-                                },
-                              );
+                      text: 'Ver materias',
+                      icon: Icons.arrow_forward_rounded,
+                      onPressed: () {
+                        final bloqueado =
+                            datos.estaSemestreBloqueado(semestreElegido);
+                        if (widget.onOpenSemester != null) {
+                          widget.onOpenSemester!(semestreElegido, bloqueado);
+                        } else {
+                          Navigator.pushNamed(
+                            context,
+                            '/semestre',
+                            arguments: {
+                              'semestre': semestreElegido,
+                              'bloqueado': bloqueado,
                             },
+                          );
+                        }
+                      },
                     ),
                   ),
-                  if (_cargandoSemestre) ...[
-                    const SizedBox(height: 12),
-                    const Center(
-                      child: SizedBox(
-                        height: 24,
-                        width: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2.5),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -419,7 +406,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildRutaResumenGlobal(ColorScheme colorScheme) {
+  Widget _buildRutaResumenGlobal(
+    ColorScheme colorScheme,
+    DatosAcademicosMock datos,
+  ) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
       child: Column(
@@ -456,11 +446,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        const Text(
                           'Promedio General Acumulado',
                           style: TextStyle(
                             fontSize: 13,
@@ -468,10 +458,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             color: Colors.grey,
                           ),
                         ),
-                        SizedBox(height: 4),
+                        const SizedBox(height: 4),
                         Text(
-                          '85.40 pts',
-                          style: TextStyle(
+                          '${datos.promedioGlobal.toStringAsFixed(2)} pts',
+                          style: const TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.bold,
                           ),
@@ -489,7 +479,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Expanded(
                 child: _MetricBox(
                   title: 'Aprobados',
-                  value: '20',
+                  value: '${datos.cursosAprobados}',
                   icon: Icons.check_circle_outline_rounded,
                   color: Colors.green,
                 ),
@@ -498,7 +488,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Expanded(
                 child: _MetricBox(
                   title: 'Reprobados',
-                  value: '2',
+                  value: '${datos.cursosReprobados}',
                   icon: Icons.cancel_outlined,
                   color: Colors.red,
                 ),
@@ -511,7 +501,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Expanded(
                 child: _MetricBox(
                   title: 'Total Cursos',
-                  value: '48',
+                  value: '${datos.totalCursosPensum}',
                   icon: Icons.menu_book_rounded,
                   color: Colors.blue,
                 ),
@@ -520,7 +510,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Expanded(
                 child: _MetricBox(
                   title: 'Créditos Aprobados',
-                  value: '95 / 220',
+                  value:
+                      '${datos.creditosAcumulados} / ${datos.totalCreditosPensum}',
                   icon: Icons.military_tech_outlined,
                   color: Colors.amber.shade700,
                 ),
@@ -528,15 +519,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
           const SizedBox(height: 24),
-          // Botón grande "Descargar PDF" ubicado hasta el final de la pantalla de resumen
           SizedBox(
             width: double.infinity,
             child: AppButton(
               text: 'Descargar PDF',
               icon: Icons.picture_as_pdf_rounded,
-              onPressed: () {
-                _generarReportePdfCarrera(context);
-              },
+              isLoading: _generandoPdf,
+              onPressed: _generandoPdf
+                  ? null
+                  : () => _generarReportePdfCarrera(context, datos),
             ),
           ),
         ],
@@ -544,28 +535,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _generarReportePdfCarrera(BuildContext context) {
+  void _generarReportePdfCarrera(
+    BuildContext context,
+    DatosAcademicosMock datos,
+  ) {
+    final usuario = datos.usuarioActual;
+    if (usuario == null) return;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Generar Reporte PDF'),
         content: const Text(
-          'Se está preparando el documento PDF con el historial académico completo de la carrera para su descarga o impresión.',
+          'Se generará el documento PDF con tu vida académica completa, notas y prerrequisitos para guardar o compartir.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancelar'),
           ),
           FilledButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  behavior: SnackBarBehavior.floating,
-                  content: Text('Reporte PDF generado y guardado exitosamente.'),
-                ),
-              );
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              setState(() => _generandoPdf = true);
+              try {
+                await _pdfService.generarYMostrarVidaAcademica(
+                  usuario,
+                  cursosPrecargados: datos.todosLosCursos,
+                  catedraticosPrecargados: datos.catedraticos,
+                );
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      behavior: SnackBarBehavior.floating,
+                      content: Text(
+                        'No se pudo generar el reporte PDF. Intenta de nuevo.',
+                      ),
+                    ),
+                  );
+                }
+              } finally {
+                if (mounted) setState(() => _generandoPdf = false);
+              }
             },
             child: const Text('Descargar / Compartir'),
           ),
@@ -574,18 +586,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _abrirPerfil(BuildContext context) {
+  void _abrirPerfil(BuildContext context, DatosAcademicosMock datos) {
+    final usuario = datos.usuarioActual;
+    final semestreActual =
+        datos.semestreMaximoHabilitado.clamp(1, datos.totalSemestres);
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => ProfileScreen(
-          nombreCompleto: _nombreCompleto,
-          carne: _carne,
-          carrera: _carrera,
+          nombreCompleto: usuario?.nombre ?? 'Estudiante',
+          carne: usuario?.carnet ?? '---',
+          carrera: usuario?.carrera ?? 'Ingeniería en Sistemas',
           universidad: _universidad,
-          periodoActual: '$_semestreActual.º Semestre',
-          correo: _correo,
-          fotoUrl: _fotoPerfilUrl,
+          periodoActual: '$semestreActual.º Semestre',
+          correo: usuario?.correo ?? '',
+          onResetPassword: (correo) =>
+              AuthService().enviarCorreoRecuperacion(correo),
           onLogout: widget.onLogout,
         ),
       ),
@@ -643,6 +660,7 @@ class _RutaCatedraticosState extends State<_RutaCatedraticos> {
         agrupados.putIfAbsent(letra, () => []).add(prof);
       }
     }
+
     final letrasOrdenadas = agrupados.keys.toList()..sort();
 
     return Scaffold(
