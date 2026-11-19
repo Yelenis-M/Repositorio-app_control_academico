@@ -1,7 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/catedratico_model.dart';
+import 'package:flutter/material.dart';
+import '../models/catedratico.dart';
 
-typedef ListaModelosCatedraticos = List<CatedraticoModel>;
+typedef ListaCatedraticos = List<Catedratico>;
 
 class CatedraticosService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -12,7 +13,8 @@ class CatedraticosService {
     required String nombre,
     String correo = '',
     String telefono = '',
-    String horario = '',
+    String horarioOficina = '',
+    Color? color,
   }) async {
     final nombreLimpio = nombre.trim();
     if (nombreLimpio.isEmpty) return false;
@@ -26,27 +28,33 @@ class CatedraticosService {
     for (var doc in existentes.docs) {
       final nombreActual = (doc.data()['nombre'] ?? '').toString().trim();
       if (nombreActual.toLowerCase() == nombreLimpio.toLowerCase()) {
-        return false; // Ya existe un catedrático con ese nombre en este usuario
+        return false; // Evita duplicados en el mismo usuario
       }
     }
+
+    final nuevo = Catedratico(
+      id: '',
+      nombre: nombreLimpio,
+      correo: correo,
+      telefono: telefono,
+      horarioOficina: horarioOficina,
+      color: color,
+    );
 
     await _firestore
         .collection('usuarios')
         .doc(carnet)
         .collection('catedraticos')
         .add({
-      'nombre': nombreLimpio,
-      'correo': correo.trim(),
-      'telefono': telefono.trim(),
-      'horario': horario.trim(),
+      ...nuevo.toMap(),
       'fecha_registro': FieldValue.serverTimestamp(),
     });
 
     return true;
   }
 
-  // 2. LEER (R): Obtiene la lista de objetos CatedraticoModel del alumno ordenados por nombre
-  Future<ListaModelosCatedraticos> obtenerCatedraticos(String carnet) async {
+  // 2. LEER (R): Obtiene la lista de Catedratico del alumno ordenados por nombre
+  Future<ListaCatedraticos> obtenerCatedraticos(String carnet) async {
     final snapshot = await _firestore
         .collection('usuarios')
         .doc(carnet)
@@ -55,30 +63,21 @@ class CatedraticosService {
         .get();
 
     return snapshot.docs
-        .map((doc) => CatedraticoModel.fromMap(doc.data(), doc.id))
+        .map((doc) => Catedratico.fromMap(doc.data(), doc.id))
         .toList();
   }
 
-  // 3. ACTUALIZAR (U): Edita los datos de un catedrático existente
+  // 3. ACTUALIZAR (U): Edita un catedrático existente
   Future<void> actualizarCatedratico({
     required String carnet,
-    required String idDocumento,
-    required String nombre,
-    String correo = '',
-    String telefono = '',
-    String horario = '',
+    required Catedratico catedratico,
   }) async {
     await _firestore
         .collection('usuarios')
         .doc(carnet)
         .collection('catedraticos')
-        .doc(idDocumento)
-        .update({
-      'nombre': nombre.trim(),
-      'correo': correo.trim(),
-      'telefono': telefono.trim(),
-      'horario': horario.trim(),
-    });
+        .doc(catedratico.id)
+        .update(catedratico.toMap());
   }
 
   // 4. ELIMINAR (D): Borra un catedrático de la agenda del alumno

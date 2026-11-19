@@ -1,24 +1,26 @@
 import 'package:flutter/material.dart';
-import '../theme/app_colors.dart'; // Asegúrate de importar tu archivo de colores
+import '../theme/app_colors.dart';
 
-/// Profesor creado por el usuario. Los datos viven en memoria hasta que
-/// se conecte Firestore.
 class Catedratico {
   const Catedratico({
     required this.id,
     required this.nombre,
     required this.correo,
     required this.telefono,
-    Color? color, // Ahora es opcional (nullable en el parámetro)
+    Color? color,
     this.horarioOficina = '',
-  }) : color = color ?? AppColors.primary; // 👈 Si es null, asigna el color primario por defecto
+  }) : color = color ?? AppColors.primary;
+  // ...el resto de campos, copyWith, fromMap y toMap queda igual
 
   final String id;
   final String nombre;
   final String correo;
   final String telefono;
-  final Color color; // Ya no es nullable, siempre tendrá un color seguro
+  final Color color;
   final String horarioOficina;
+
+  // Alias por compatibilidad con lógica previa
+  String get horario => horarioOficina;
 
   Catedratico copyWith({
     String? nombre,
@@ -35,5 +37,31 @@ class Catedratico {
       color: color ?? this.color,
       horarioOficina: horarioOficina ?? this.horarioOficina,
     );
+  }
+
+  factory Catedratico.fromMap(Map<String, dynamic> data, String documentId) {
+    final colorInt = (data['color'] as num?)?.toInt();
+    // Lee 'horario_oficina' o el antiguo 'horario' para no romper registros previos
+    final textoHorario = (data['horario_oficina'] ?? data['horario'] ?? '').toString();
+
+    return Catedratico(
+      id: documentId,
+      nombre: (data['nombre'] ?? '').toString(),
+      correo: (data['correo'] ?? '').toString(),
+      telefono: (data['telefono'] ?? '').toString(),
+      color: colorInt != null ? Color(colorInt) : null,
+      horarioOficina: textoHorario,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'nombre': nombre.trim(),
+      'correo': correo.trim(),
+      'telefono': telefono.trim(),
+      'horario_oficina': horarioOficina.trim(),
+      'horario': horarioOficina.trim(),
+      'color': color.toARGB32(),
+    };
   }
 }

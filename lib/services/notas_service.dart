@@ -1,7 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/curso_model.dart';
+import 'package:flutter/material.dart';
+import '../models/curso.dart';
+import '../models/horario_curso.dart';
+import '../models/iconos_materia.dart';
 
-typedef ListaCursos = List<CursoModel>;
+typedef ListaCursos = List<Curso>;
 typedef MapaDatos = Map<String, dynamic>;
 
 class NotasService {
@@ -28,7 +31,7 @@ class NotasService {
     return numeroSemestre > maximoHabilitado;
   }
 
-  // 2. LEER (R): Trae cursos del semestre + valida prerrequisitos (Soporta múltiples pénsums)
+  // 2. LEER (R): Trae cursos del semestre + datos del alumno + validación de prerrequisitos
   Future<ListaCursos> obtenerCursosPorSemestre(
     String carnet,
     String carreraId,
@@ -46,17 +49,14 @@ class NotasService {
         .collection('notas')
         .get();
 
+    final Map<String, MapaDatos> mapaDatosUsuario = {};
     final Map<String, double> mapaNotas = {};
-    final Map<String, String> mapaCatedraticos = {};
 
     for (var doc in notasSnapshot.docs) {
       final data = doc.data();
+      mapaDatosUsuario[doc.id] = data;
       if (data['nota'] != null) {
         mapaNotas[doc.id] = (data['nota'] as num).toDouble();
-      }
-      if (data['catedratico'] != null &&
-          data['catedratico'].toString().trim().isNotEmpty) {
-        mapaCatedraticos[doc.id] = data['catedratico'].toString().trim();
       }
     }
 
@@ -78,11 +78,10 @@ class NotasService {
         }
       }
 
-      return CursoModel.fromMap(
+      return Curso.fromMap(
         data,
         doc.id,
-        nota: mapaNotas[codigoCurso],
-        catedratico: mapaCatedraticos[codigoCurso],
+        datosUsuario: mapaDatosUsuario[codigoCurso],
         bloqueadoPorPrerequisito: faltantes.isNotEmpty,
         prerequisitosFaltantes: faltantes.join(', '),
       );
@@ -92,29 +91,53 @@ class NotasService {
     return lista;
   }
 
-  // 3. CREAR / ACTUALIZAR (C / U): Guarda o sobreescribe nota y catedrático del curso
+  // 3. CREAR / ACTUALIZAR (C / U): Guarda nota (opcional) y personalización del curso
   Future<void> guardarNota(
     String carnet,
     String codigoCurso,
-    double nota, {
+    double? nota, {
     String? catedratico,
-    String? horario, // <-- Nuevo campo opcional de horario para el curso
+    String? catedraticoId,
+    String? descripcion,
+    HorarioCurso? horario,
+    Color? color,
+    IconData? icono,
     String carreraId = 'sistemas',
   }) async {
-    final Map<String, dynamic> datosGuardar = {
-      'nota': nota,
+    final MapaDatos datosGuardar = {
       'fecha_actualizacion': FieldValue.serverTimestamp(),
     };
 
-    if (nota < 0) nota = 0;
-    if (nota > 100) nota = 100;
+    // Validación 0–100 antes de guardar; si nota es null, borra solo la nota previa
+    if (nota != null) {
+      double notaSegura = nota;
+      if (notaSegura < 0) notaSegura = 0;
+      if (notaSegura > 100) notaSegura = 100;
+      datosGuardar['nota'] = notaSegura;
+    } else {
+      datosGuardar['nota'] = FieldValue.delete();
+    }
 
     if (catedratico != null) {
       datosGuardar['catedratico'] = catedratico.trim();
     }
-
+    if (catedraticoId != null) {
+      datosGuardar['catedratico_id'] = catedraticoId.trim();
+    }
+    if (descripcion != null) {
+      datosGuardar['descripcion'] = descripcion.trim();
+    }
     if (horario != null) {
-      datosGuardar['horario'] = horario.trim(); // <-- Guarda el string del horario (ej. "Viernes, 9:00 am a 11:00 pm")
+      datosGuardar['horario'] = horario.toMap();
+    }
+    if (color != null) {
+      datosGuardar['color'] = color.toARGB32();
+    }
+    if (icono != null) {
+      final idx = iconosMateria.indexOf(icono);
+      if (idx != -1) {
+        datosGuardar['icono_index'] = idx;
+      }
     }
 
     await _firestore
@@ -139,7 +162,23 @@ class NotasService {
     await obtenerResumenGlobal(carnet, carreraId);
   }
 
-  // 4. ELIMINAR (D): Borra el registro de nota/catedrático de un curso y recalcula promedios
+  // Atajo directo para guardar desde un objeto Curso editado en el Frontend de Yelenis
+  Future<void> guardarCursoCompleto(String carnet, Curso curso) async {
+    await guardarNota(
+      carnet,
+      curso.id,
+      curso.calificacion,
+      catedratico: curso.catedraticoNombre,
+      catedraticoId: curso.catedraticoId,
+      descripcion: curso.descripcion,
+      horario: curso.horario,
+      color: curso.color,
+      icono: curso.icono,
+      carreraId: curso.carreraId,
+    );
+  }
+
+  // 4. ELIMINAR (D): Borra los datos del usuario para un curso (equivalente a sinDatosIngresados)
   Future<void> eliminarNota(
     String carnet,
     String codigoCurso, {
@@ -182,9 +221,9 @@ class NotasService {
     int cursosEvaluados = 0;
 
     for (var c in cursos) {
-      if (c.nota != null) {
+      if (c.calificacion != null) {
         cursosEvaluados++;
-        sumaNotas += c.nota!;
+        sumaNotas += c.calificacion!;
         if (c.aprobado) {
           aprobados++;
           creditosSemestre += c.creditos;

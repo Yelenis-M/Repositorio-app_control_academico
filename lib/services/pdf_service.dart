@@ -2,22 +2,30 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../models/usuario_model.dart';
-import '../models/curso_model.dart';
+import '../models/curso.dart';
 import 'notas_service.dart';
+import 'catedraticos_service.dart';
 
-typedef MapaSemestres = Map<int, List<CursoModel>>;
+typedef MapaSemestres = Map<int, List<Curso>>;
 
 class PdfService {
   final NotasService _notasService = NotasService();
+  final CatedraticosService _catedraticosService = CatedraticosService();
 
   Future<void> generarYMostrarVidaAcademica(UsuarioModel usuario) async {
     final pdf = pw.Document();
 
-    // 1. Obtener resumen global y todos los cursos de los 11 semestres según el pénsum del alumno
     final resumenGlobal = await _notasService.obtenerResumenGlobal(
       usuario.carnet,
       usuario.carreraId,
     );
+
+    // Mapa id -> nombre de catedráticos por si el curso solo tiene catedraticoId
+    final listaCatedraticos =
+        await _catedraticosService.obtenerCatedraticos(usuario.carnet);
+    final Map<String, String> mapaNombresCat = {
+      for (var cat in listaCatedraticos) cat.id: cat.nombre,
+    };
 
     final MapaSemestres cursosPorSemestre = {};
     for (int s = 1; s <= 11; s++) {
@@ -34,7 +42,6 @@ class PdfService {
     final etiquetaPensum =
         usuario.carreraId == 'sistemas_2026' ? 'Pénsum 2026' : 'Pénsum 2024';
 
-    // 2. Construir las páginas del documento PDF (Paginación automática con MultiPage)
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.letter,
@@ -46,20 +53,16 @@ class PdfService {
           _construirCajaResumenGlobal(resumenGlobal),
           pw.SizedBox(height: 14),
           for (var entrada in cursosPorSemestre.entries) ...[
-            _construirBloqueSemestre(entrada.key, entrada.value),
+            _construirBloqueSemestre(entrada.key, entrada.value, mapaNombresCat),
             pw.SizedBox(height: 12),
           ],
         ],
       ),
     );
 
-
-    // 3. Abrir el menú directo de Android para Guardar en Archivos / Compartir PDF (sin menú de impresoras)
-    
     await Printing.sharePdf(
       bytes: await pdf.save(),
       filename: 'Vida_Academica_${usuario.carnet}.pdf',
-      
     );
   }
 
@@ -178,16 +181,20 @@ class PdfService {
     );
   }
 
-  pw.Widget _construirBloqueSemestre(int semestre, List<CursoModel> cursos) {
+  pw.Widget _construirBloqueSemestre(
+    int semestre,
+    List<Curso> cursos,
+    Map<String, String> mapaNombresCat,
+  ) {
     int aprobados = 0;
     int creditosSem = 0;
     double suma = 0;
     int evaluados = 0;
 
     for (var c in cursos) {
-      if (c.nota != null) {
+      if (c.calificacion != null) {
         evaluados++;
-        suma += c.nota!;
+        suma += c.calificacion!;
         if (c.aprobado) {
           aprobados++;
           creditosSem += c.creditos;
@@ -198,21 +205,26 @@ class PdfService {
     final promSem = evaluados > 0 ? (suma / evaluados).toStringAsFixed(2) : '0.00';
 
     final filas = cursos.map((c) {
-      final textoNota = c.nota != null ? c.nota!.toStringAsFixed(0) : '-';
-      final textoEstado = c.nota == null
+      final textoNota = c.calificacion != null ? c.calificacion!.toStringAsFixed(0) : '-';
+      final textoEstado = c.calificacion == null
           ? 'PENDIENTE'
           : (c.aprobado ? 'APROBADO' : 'REPROBADO');
-      final textoCatedratico =
-          (c.catedratico != null && c.catedratico!.isNotEmpty) ? c.catedratico! : '-';
+
+      String textoCatedratico = '-';
+      if (c.catedraticoNombre != null && c.catedraticoNombre!.isNotEmpty) {
+        textoCatedratico = c.catedraticoNombre!;
+      } else if (c.catedraticoId != null && mapaNombresCat.containsKey(c.catedraticoId)) {
+        textoCatedratico = mapaNombresCat[c.catedraticoId]!;
+      }
 
       return [
-        c.codigo,
+        c.id,
         c.nombre,
         '${c.creditos}',
         textoNota,
         textoEstado,
         textoCatedratico,
-        c.prerequisitos,
+        c.prerequisitosNombresLimpios,
       ];
     }).toList();
 
