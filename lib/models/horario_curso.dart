@@ -19,6 +19,32 @@ class HorarioCurso {
     return '$inicio $periodoInicio - $fin $periodoFin';
   }
 
+  /// Minutos transcurridos desde las 00:00 para comparar horas en formato 24h.
+  int get inicioEnMinutos => _aMinutos24h(inicio, inicioEsPm);
+  int get finEnMinutos => _aMinutos24h(fin, finEsPm);
+
+  /// Verdadero solo si la hora de fin es posterior a la de inicio.
+  bool get esRangoValido => finEnMinutos > inicioEnMinutos;
+
+  static int _aMinutos24h(String horaNormalizada, bool esPm) {
+    final partes = horaNormalizada.split(':');
+    int hora = int.parse(partes[0]);
+    final int minuto = int.parse(partes[1]);
+
+    // Si el usuario escribió formato 24h (00:xx o 13:00–23:59), ya está en 24h
+    if (hora == 0 || hora >= 13) {
+      return (hora * 60) + minuto;
+    }
+
+    // Si escribió formato 12h (01:00–12:59), aplicamos AM/PM
+    if (esPm) {
+      if (hora != 12) hora += 12; // 03:00 PM -> 15:00, 12:00 PM -> 12:00
+    } else {
+      if (hora == 12) hora = 0; // 12:00 AM -> 00:00, 09:00 AM -> 09:00
+    }
+    return (hora * 60) + minuto;
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'inicio': inicio,
@@ -67,8 +93,7 @@ class HorarioCurso {
     return null;
   }
 
-  /// Devuelve la hora en `00:00`, o null si está vacía o no cumple el formato.
-  /// Acepta horas de 00 a 12.
+  /// Acepta tanto formato 12h (01:00–12:59) como 24h (00:00–23:59).
   static String? normalizarHora(String texto) {
     final limpio = texto.trim();
     if (limpio.isEmpty) return null;
@@ -76,7 +101,7 @@ class HorarioCurso {
     if (coincidencia == null) return null;
     final hora = int.parse(coincidencia.group(1)!);
     final minuto = int.parse(coincidencia.group(2)!);
-    if (hora < 0 || hora > 12 || minuto < 0 || minuto > 59) return null;
+    if (hora < 0 || hora > 23 || minuto < 0 || minuto > 59) return null;
     final horaTexto = hora.toString().padLeft(2, '0');
     final minutoTexto = minuto.toString().padLeft(2, '0');
     return '$horaTexto:$minutoTexto';

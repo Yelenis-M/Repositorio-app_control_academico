@@ -190,22 +190,28 @@ class _FormCatedraticoViewState extends State<FormCatedraticoView> {
       horarioOficina: _horarioOficina.text.trim(),
     );
 
+    final datos = context.read<DatosAcademicosMock>();
     final callback = widget.onGuardar;
     if (callback != null) {
       await callback(catedratico);
     } else {
-      context.read<DatosAcademicosMock>().guardarCatedratico(catedratico);
+      datos.guardarCatedratico(catedratico);
     }
 
+    final hayInternet = await datos.tieneConexionInternet();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text(
-          _editando ? 'Catedrático actualizado' : 'Profesor creado',
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            hayInternet
+                ? (_editando ? 'Catedrático actualizado' : 'Profesor creado')
+                : 'Guardado de forma local (sin internet). Se sincronizará con la nube al reconectarte.',
+          ),
         ),
-      ),
-    );
+      );
     Navigator.pop(context, catedratico);
   }
 }

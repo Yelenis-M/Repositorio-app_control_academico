@@ -101,10 +101,10 @@ class _AppTextFieldState extends State<AppTextField> {
                 onPressed: !widget.enabled || !widget.visibilityToggleEnabled
                     ? null
                     : () => setState(() => _ocultarTexto = !_ocultarTexto),
-                icon: Icon(
+               icon: Icon(
                   _ocultarTexto
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
                 ),
               )
             : widget.suffixIcon,

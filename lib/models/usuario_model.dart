@@ -25,7 +25,7 @@ class UsuarioModel {
       usuario: (data['usuario'] ?? '').toString(),
       nombre: (data['nombre'] ?? '').toString(),
       correo: (data['correo'] ?? '').toString(),
-      carrera: (data['carrera'] ?? '').toString(),
+      carrera: (data['carrera'] ?? data['carrea'] ?? '').toString().trim(),
       carreraId: (data['carrera_id'] ?? 'sistemas').toString(),
       anioIngreso: (data['anio_ingreso'] as num?)?.toInt() ?? 2024,
       fotoBase64: data['foto_base64']?.toString(),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -82,6 +83,17 @@ class DatosAcademicosMock extends ChangeNotifier {
     if (_usuarioActual == null) return;
     _usuarioActual!.fotoBase64 = nuevaFoto;
     notifyListeners();
+  }
+
+  /// Comprueba rápidamente si hay conexión real a internet para informar al usuario
+  Future<bool> tieneConexionInternet() async {
+    try {
+      final resultado = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(milliseconds: 1500));
+      return resultado.isNotEmpty && resultado[0].rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Carga todo el pénsum, notas y catedráticos del estudiante logueado

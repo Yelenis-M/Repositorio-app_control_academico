@@ -287,7 +287,17 @@ class _EditarCursoViewState extends State<EditarCursoView> {
                       controller: _inicio,
                       esPm: _inicioEsPm,
                       onPeriodo: (esPm) => setState(() => _inicioEsPm = esPm),
-                      onChanged: () => setState(() => _errorHorario = null),
+                      onChanged: () {
+                        final norm = HorarioCurso.normalizarHora(_inicio.text);
+                        setState(() {
+                          _errorHorario = null;
+                          if (norm != null) {
+                            final h = int.parse(norm.split(':')[0]);
+                            if (h >= 13) _inicioEsPm = true;
+                            if (h == 0) _inicioEsPm = false;
+                          }
+                        });
+                      },
                     ),
                     const SizedBox(height: 12),
                     _FilaHora(
@@ -295,7 +305,17 @@ class _EditarCursoViewState extends State<EditarCursoView> {
                       controller: _fin,
                       esPm: _finEsPm,
                       onPeriodo: (esPm) => setState(() => _finEsPm = esPm),
-                      onChanged: () => setState(() => _errorHorario = null),
+                      onChanged: () {
+                        final norm = HorarioCurso.normalizarHora(_fin.text);
+                        setState(() {
+                          _errorHorario = null;
+                          if (norm != null) {
+                            final h = int.parse(norm.split(':')[0]);
+                            if (h >= 13) _finEsPm = true;
+                            if (h == 0) _finEsPm = false;
+                          }
+                        });
+                      },
                     ),
                     if (_vistaPreviaHorario != null) ...[
                       const SizedBox(height: 12),
@@ -429,20 +449,28 @@ class _EditarCursoViewState extends State<EditarCursoView> {
       icono: _icono,
     );
 
+    final datos = context.read<DatosAcademicosMock>();
     final callback = widget.onActualizar;
     if (callback != null) {
       await callback(actualizado);
     } else {
-      context.read<DatosAcademicosMock>().actualizarCurso(actualizado);
+      datos.actualizarCurso(actualizado);
     }
 
+    final hayInternet = await datos.tieneConexionInternet();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text('Materia actualizada'),
-      ),
-    );
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            hayInternet
+                ? 'Materia actualizada'
+                : 'Guardado de forma local (sin internet). Se sincronizará con la nube al reconectarte.',
+          ),
+        ),
+      );
     Navigator.pop(context);
   }
 
@@ -462,10 +490,32 @@ class _EditarCursoViewState extends State<EditarCursoView> {
     if (inicioTexto.isEmpty || finTexto.isEmpty) {
       return 'Completa el horario de inicio y de fin (00:00).';
     }
-    // HorarioCurso.normalizarHora ya valida formato y rango (00:00–12:00).
-    if (HorarioCurso.normalizarHora(inicioTexto) == null ||
-        HorarioCurso.normalizarHora(finTexto) == null) {
-      return 'Usa una hora entre 00:00 y 12:00 y define si es AM o PM.';
+
+    final inicioNorm = HorarioCurso.normalizarHora(inicioTexto);
+    final finNorm = HorarioCurso.normalizarHora(finTexto);
+    if (inicioNorm == null || finNorm == null) {
+      return 'Usa una hora válida en formato 12h o 24h (ej. 03:00 o 15:00).';
+    }
+
+    final horaInicio = int.parse(inicioNorm.split(':')[0]);
+    final horaFin = int.parse(finNorm.split(':')[0]);
+
+    if ((horaInicio >= 13 && !_inicioEsPm) || (horaFin >= 13 && !_finEsPm)) {
+      return 'Las horas de 13:00 a 23:59 corresponden a PM.';
+    }
+    if ((horaInicio == 0 && _inicioEsPm) || (horaFin == 0 && _finEsPm)) {
+      return 'Las horas de 00:00 a 00:59 corresponden a AM.';
+    }
+
+    final horario = HorarioCurso(
+      inicio: inicioNorm,
+      fin: finNorm,
+      inicioEsPm: _inicioEsPm,
+      finEsPm: _finEsPm,
+    );
+
+    if (!horario.esRangoValido) {
+      return 'La hora de fin debe ser posterior a la hora de inicio.';
     }
     return null;
   }

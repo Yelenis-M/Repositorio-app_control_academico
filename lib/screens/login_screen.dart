@@ -188,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Entra con tu usuario o con Google.',
+                      'Accede con tu correo electrónico o usuario, o continúa con Google.',
                       textAlign: TextAlign.center,
                       style: tema.textTheme.bodyLarge?.copyWith(
                         color: esquema.onSurfaceVariant,
@@ -202,7 +202,7 @@ class _LoginScreenState extends State<LoginScreen>
                         children: [
                           AppTextField(
                             controller: _usuarioController,
-                            label: 'Usuario',
+                            label: 'Correo o usuario',
                             prefixIcon: Icons.person_outline_rounded,
                             enabled: !_ocupado,
                             textInputAction: TextInputAction.next,
@@ -288,6 +288,9 @@ class _LoginScreenState extends State<LoginScreen>
 }
 
 String mensajeAmigable(Object error) {
+  if (error.toString().toLowerCase().contains('google-no-disponible')) {
+    return 'El inicio de sesión con Google no está disponible en este momento. Intenta ingresar con tu correo o usuario.';
+  }
   if (_esFalloDeRed(error)) {
     return 'Sin conexión a internet. Verifica tu red e intenta de nuevo.';
   }
@@ -354,7 +357,7 @@ bool _esCorreoNoAutorizado(Object error) {
 
 String? _validarUsuario(String? valor) {
   if (valor == null || valor.trim().isEmpty) {
-    return 'Escribe tu usuario.';
+    return 'Escribe tu correo o usuario.';
   }
   return null;
 }

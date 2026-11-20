@@ -191,15 +191,23 @@ class _EditarCatedraticoViewState extends State<EditarCatedraticoView> {
       horarioOficina: _horarioOficina.text.trim(),
     );
 
-    context.read<DatosAcademicosMock>().guardarCatedratico(actualizado);
+    final datos = context.read<DatosAcademicosMock>();
+    datos.guardarCatedratico(actualizado);
 
+    final hayInternet = await datos.tieneConexionInternet();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text('Catedrático actualizado'),
-      ),
-    );
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            hayInternet
+                ? 'Catedrático actualizado'
+                : 'Actualizado de forma local (sin internet). Se sincronizará con la nube al reconectarte.',
+          ),
+        ),
+      );
     Navigator.pop(context);
   }
 
@@ -234,20 +242,26 @@ class _EditarCatedraticoViewState extends State<EditarCatedraticoView> {
     );
   }
 
-  void _eliminarCatedratico() {
+  Future<void> _eliminarCatedratico() async {
     final id = widget.catedraticoId;
-    context.read<DatosAcademicosMock>().eliminarCatedratico(id);
+    final datos = context.read<DatosAcademicosMock>();
+    datos.eliminarCatedratico(id);
 
+    final hayInternet = await datos.tieneConexionInternet();
     if (!mounted) return;
-    
-    // Regresamos dos veces o al inicio según tu navegación para salir del perfil y edición
-    Navigator.of(context).popUntil((route) => route.isFirst);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text('Catedrático eliminado'),
-      ),
-    );
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            hayInternet
+                ? 'Catedrático eliminado'
+                : 'Eliminado de forma local (sin internet). Se sincronizará con la nube al reconectarte.',
+          ),
+        ),
+      );
   }
 }

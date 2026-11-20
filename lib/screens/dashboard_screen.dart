@@ -597,7 +597,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         builder: (_) => ProfileScreen(
           nombreCompleto: usuario?.nombre ?? 'Estudiante',
           carne: usuario?.carnet ?? '---',
-          carrera: usuario?.carrera ?? 'Ingeniería en Sistemas',
+          carrera: (usuario?.carrera.trim().isNotEmpty ?? false)
+              ? usuario!.carrera
+              : 'Sin carrera asignada',
           universidad: _universidad,
           periodoActual: '$semestreActual.º Semestre',
           correo: usuario?.correo ?? '',

@@ -288,6 +288,17 @@ class NotasService {
       }
     }
 
+    // Mapa código -> nombre real para traducir los prerrequisitos
+    final Map<String, String> mapaNombresCursos = {};
+    for (var doc in pensumSnapshot.docs) {
+      final data = doc.data();
+      final codigo = (data['codigo'] ?? doc.id).toString().trim().toUpperCase();
+      final nombre = (data['nombre'] ?? '').toString().trim();
+      if (codigo.isNotEmpty && nombre.isNotEmpty) {
+        mapaNombresCursos[codigo] = nombre;
+      }
+    }
+
     final regExpCodigos = RegExp(r'[A-Z]{4}\d{4}');
 
     final lista = pensumSnapshot.docs.map((doc) {
@@ -312,6 +323,7 @@ class NotasService {
         datosUsuario: mapaDatosUsuario[codigoCurso],
         bloqueadoPorPrerequisito: faltantes.isNotEmpty,
         prerequisitosFaltantes: faltantes.join(', '),
+        mapaNombresCursos: mapaNombresCursos,
       );
     }).toList();
 

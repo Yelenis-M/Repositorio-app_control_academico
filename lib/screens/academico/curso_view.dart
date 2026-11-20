@@ -101,7 +101,7 @@ class CursoView extends StatelessWidget {
                           Expanded(
                             child: Text(
                               curso.bloqueadoPorPrerequisito
-                                  ? 'Curso bloqueado. Debes aprobar primero: ${curso.prerequisitosFaltantes}.'
+                                  ? 'Curso bloqueado. Debes aprobar primero los cursos prerrequisitos.'
                                   : 'Semestre en solo lectura. No es posible editar ni borrar datos.',
                               style: TextStyle(color: esquema.onSurfaceVariant),
                             ),
@@ -206,8 +206,8 @@ class CursoView extends StatelessWidget {
         return AlertDialog(
           title: const Text('Eliminar información'),
           content: const Text(
-            'Se borrarán los datos de catedrático, calificación y horario, '
-            'descripción y también las configuraciones de ícono y color de esta materia.',
+            'Se borrarán los datos del catedrático, la calificación, el horario, '
+            'la descripción y la configuración del ícono y color de esta materia.',
           ),
           actions: [
             AppButton(
@@ -226,20 +226,28 @@ class CursoView extends StatelessWidget {
 
     if (confirmar != true || !context.mounted) return;
 
+    final datos = context.read<DatosAcademicosMock>();
     final callback = onEliminarInformacion;
     if (callback != null) {
       await callback(cursoId);
     } else {
-      context.read<DatosAcademicosMock>().limpiarInformacionCurso(cursoId);
+      datos.limpiarInformacionCurso(cursoId);
     }
 
+    final hayInternet = await datos.tieneConexionInternet();
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text('Se eliminó la información de la materia.'),
-      ),
-    );
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            hayInternet
+                ? 'Se eliminó la información de la materia.'
+                : 'Eliminado de forma local (sin internet). Se sincronizará con la nube al reconectarte.',
+          ),
+        ),
+      );
   }
 }
 

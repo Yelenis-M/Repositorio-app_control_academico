@@ -105,16 +105,20 @@ class Curso {
     Map<String, dynamic>? datosUsuario,
     bool bloqueadoPorPrerequisito = false,
     String prerequisitosFaltantes = '',
+    Map<String, String>? mapaNombresCursos,
   }) {
     final codigoLimpio = (dataCurso['codigo'] ?? documentId).toString();
     final textoPrereq = (dataCurso['prerequisitos'] ?? 'Ninguno').toString();
 
-    // Convierte "SIST2015 - Intro a la Prog, MATE2015 - Mate" -> ['Intro a la Prog', 'Mate']
-    final List<String> listaRequisitos = _extraerNombresRequisitos(textoPrereq);
+    // Traduce códigos (ej. "SIST2029") o "SIST2029 - Nombre" a nombres limpios
+    final List<String> listaRequisitos = _extraerNombresRequisitos(
+      textoPrereq,
+      mapaNombresCursos,
+    );
 
-    // Extraer personalización y nota guardada en usuarios/{carnet}/notas/{codigo}
     final notaRaw = datosUsuario?['nota'];
-    final double? calificacion = notaRaw != null ? (notaRaw as num).toDouble() : null;
+    final double? calificacion =
+        notaRaw != null ? (notaRaw as num).toDouble() : null;
 
     final String? catId = _textoOpcional(datosUsuario?['catedratico_id']);
     final String? catNombre = _textoOpcional(datosUsuario?['catedratico']);
@@ -150,13 +154,42 @@ class Curso {
     );
   }
 
-  static List<String> _extraerNombresRequisitos(String texto) {
+  static List<String> _extraerNombresRequisitos(
+    String texto,
+    Map<String, String>? mapaNombresCursos,
+  ) {
     final limpio = texto.trim();
     if (limpio.isEmpty || limpio.toLowerCase() == 'ninguno') return const [];
 
+    final regExpCodigoSolo = RegExp(r'^[A-Z]{2,6}\s*-?\s*\d{3,5}$');
+    final regExpPrefijoCodigo = RegExp(
+      r'^[A-Z]{2,6}\s*-?\s*\d{3,5}\s*[-–—:]?\s*',
+      caseSensitive: false,
+    );
+
     return limpio
         .split(',')
-        .map((p) => p.replaceAll(RegExp(r'[A-Z]{4}\d{4}\s*-\s*'), '').trim())
+        .map((parte) {
+          final item = parte.trim();
+          if (item.isEmpty) return '';
+
+          final enMayus = item.toUpperCase();
+          if (regExpCodigoSolo.hasMatch(enMayus)) {
+            final codigoLimpio = enMayus.replaceAll(RegExp(r'[\s-]'), '');
+            final nombreResuelto = mapaNombresCursos?[codigoLimpio] ?? item;
+            return nombreResuelto.replaceFirst(regExpPrefijoCodigo, '').trim();
+          }
+
+          final sinCodigo = item.replaceFirst(regExpPrefijoCodigo, '').trim();
+          if (sinCodigo.isNotEmpty) return sinCodigo;
+
+          final match = RegExp(r'[A-Z]{4}\d{4}').firstMatch(enMayus);
+          if (match != null) {
+            final nombreResuelto = mapaNombresCursos?[match.group(0)!] ?? item;
+            return nombreResuelto.replaceFirst(regExpPrefijoCodigo, '').trim();
+          }
+          return item;
+        })
         .where((p) => p.isNotEmpty)
         .toList();
   }

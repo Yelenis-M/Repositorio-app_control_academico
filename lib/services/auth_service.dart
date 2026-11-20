@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -11,6 +12,59 @@ class AuthService {
 
   // Sesión activa en memoria
   static UsuarioModel? usuarioActual;
+
+  Future<UsuarioModel> _construirUsuarioConCarrera(
+    Map<String, dynamic> data,
+    String docId,
+  ) async {
+    final usuarioBase = UsuarioModel.fromMap(data, docId);
+    if (usuarioBase.carrera.isNotEmpty) {
+      return usuarioBase;
+    }
+
+    String nombreCarrera = '';
+    try {
+      final docCarrera = await _firestore
+          .collection('carreras')
+          .doc(usuarioBase.carreraId)
+          .get()
+          .timeout(const Duration(seconds: 3));
+      if (docCarrera.exists) {
+        final datosCarrera = docCarrera.data();
+        nombreCarrera =
+            (datosCarrera?['nombre'] ?? datosCarrera?['carrera'] ?? '')
+                .toString()
+                .trim();
+      }
+    } catch (_) {
+      try {
+        final docCache = await _firestore
+            .collection('carreras')
+            .doc(usuarioBase.carreraId)
+            .get(const GetOptions(source: Source.cache));
+        if (docCache.exists) {
+          final datosCarrera = docCache.data();
+          nombreCarrera =
+              (datosCarrera?['nombre'] ?? datosCarrera?['carrera'] ?? '')
+                  .toString()
+                  .trim();
+        }
+      } catch (_) {}
+    }
+
+    if (nombreCarrera.isEmpty) return usuarioBase;
+
+    return UsuarioModel(
+      carnet: usuarioBase.carnet,
+      usuario: usuarioBase.usuario,
+      nombre: usuarioBase.nombre,
+      correo: usuarioBase.correo,
+      carrera: nombreCarrera,
+      carreraId: usuarioBase.carreraId,
+      anioIngreso: usuarioBase.anioIngreso,
+      fotoBase64: usuarioBase.fotoBase64,
+    );
+  }
 
   // 1. Iniciar sesión con Correo, Usuario o Carné + Contraseña
   Future<UsuarioModel> login(String identificador, String password) async {
@@ -65,7 +119,8 @@ class AuthService {
         password: password.trim(),
       );
 
-      usuarioActual = UsuarioModel.fromMap(datosEstudiante, carnetDocId);
+      usuarioActual =
+          await _construirUsuarioConCarrera(datosEstudiante, carnetDocId);
       return usuarioActual!;
     } on FirebaseAuthException catch (e) {
       debugPrint('Error de Firebase Auth (${e.code}): ${e.message}');
@@ -76,42 +131,56 @@ class AuthService {
     }
   }
 
-  // 2. Iniciar sesión con botón de Google (Validando que exista en Firestore)
-  // Devuelve null únicamente si el usuario cerró la ventana sin elegir cuenta.
+  // 2. Iniciar sesión con botón de Google (en paralelo y con margen de 12s)
   Future<UsuarioModel?> loginConGoogle() async {
     try {
-      await _googleSignIn.signOut();
+      // Límite corto para que signOut() nunca bloquee la apertura del selector
+      await _googleSignIn
+          .signOut()
+          .timeout(const Duration(seconds: 2), onTimeout: () => null);
+
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
       if (googleUser == null) {
         return null; // Cancelado por el usuario
       }
 
-      final String correoGoogle = googleUser.email.trim();
+      // Todo el proceso posterior a elegir cuenta en paralelo y con margen de 12s
+      return await Future<UsuarioModel?>(() async {
+        final String correoGoogle = googleUser.email.trim();
 
-      final query = await _firestore
-          .collection('usuarios')
-          .where('correo', isEqualTo: correoGoogle)
-          .limit(1)
-          .get();
+        final resultados = await Future.wait([
+          _firestore
+              .collection('usuarios')
+              .where('correo', isEqualTo: correoGoogle)
+              .limit(1)
+              .get(),
+          googleUser.authentication,
+        ]);
 
-      if (query.docs.isEmpty) {
-        await _googleSignIn.signOut();
-        throw Exception('correo-no-autorizado');
-      }
+        final query = resultados[0] as QuerySnapshot<Map<String, dynamic>>;
+        final googleAuth = resultados[1] as GoogleSignInAuthentication;
 
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-      final OAuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
+        if (query.docs.isEmpty) {
+          await _googleSignIn
+              .signOut()
+              .timeout(const Duration(seconds: 2), onTimeout: () => null);
+          throw Exception('correo-no-autorizado');
+        }
 
-      await _auth.signInWithCredential(credential);
+        final OAuthCredential credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
 
-      final doc = query.docs.first;
-      usuarioActual = UsuarioModel.fromMap(doc.data(), doc.id);
-      return usuarioActual;
+        await _auth.signInWithCredential(credential);
+
+        final doc = query.docs.first;
+        usuarioActual = await _construirUsuarioConCarrera(doc.data(), doc.id);
+        return usuarioActual;
+      }).timeout(const Duration(seconds: 12));
+    } on TimeoutException {
+      throw Exception('google-no-disponible');
     } catch (e) {
       debugPrint('Error en loginConGoogle: $e');
       rethrow;
@@ -158,7 +227,7 @@ class AuthService {
 
       if (query.docs.isNotEmpty) {
         final doc = query.docs.first;
-        usuarioActual = UsuarioModel.fromMap(doc.data(), doc.id);
+        usuarioActual = await _construirUsuarioConCarrera(doc.data(), doc.id);
         return usuarioActual;
       }
     } catch (_) {
@@ -171,7 +240,8 @@ class AuthService {
 
         if (queryCache.docs.isNotEmpty) {
           final doc = queryCache.docs.first;
-          usuarioActual = UsuarioModel.fromMap(doc.data(), doc.id);
+          usuarioActual =
+              await _construirUsuarioConCarrera(doc.data(), doc.id);
           return usuarioActual;
         }
       } catch (_) {
