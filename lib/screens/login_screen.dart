@@ -188,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Accede con tu correo electrónico o usuario, o continúa con Google.',
+                      'Accede con tu correo, usuario o carné, o continúa con Google.',
                       textAlign: TextAlign.center,
                       style: tema.textTheme.bodyLarge?.copyWith(
                         color: esquema.onSurfaceVariant,
@@ -202,7 +202,7 @@ class _LoginScreenState extends State<LoginScreen>
                         children: [
                           AppTextField(
                             controller: _usuarioController,
-                            label: 'Correo o usuario',
+                            label: 'Correo, usuario o carné',
                             prefixIcon: Icons.person_outline_rounded,
                             enabled: !_ocupado,
                             textInputAction: TextInputAction.next,
@@ -357,7 +357,7 @@ bool _esCorreoNoAutorizado(Object error) {
 
 String? _validarUsuario(String? valor) {
   if (valor == null || valor.trim().isEmpty) {
-    return 'Escribe tu correo o usuario.';
+    return 'Escribe tu correo, usuario o carné.';
   }
   return null;
 }
